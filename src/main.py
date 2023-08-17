@@ -1,10 +1,10 @@
 import numpy as np
-import pygame
 import matplotlib.pyplot as plt
 
 class Actuator:
-    def __init__(self):
+    def __init__(self, position):
         self.thrust = 0.0
+        self.position = position
 
     def set_thrust(self, thrust):
         self.thrust = thrust
@@ -16,25 +16,27 @@ class DroneSimulator:
     def __init__(self):
         # Constants
         self.g = 9.81  # gravitational acceleration
-        self.mass = 1.0  # mass of the drone in kg
+        self.mass = 10.0  # mass of the drone in kg
         self.dt = 0.01  # time step
         self.drag_coeff = 0.01
         
         # Initial State
-        self.position = np.array([0.0, 0.0, 30.0])  # x, y, z
+        self.position = np.array([0.0, 0.0, 30.0])
         self.velocity = np.array([0.0, 0.0, 0.0])
 
-        # Manual inputs
-        self.thrust = 0  # from propellers
-        self.torque = np.array([0, 0, 0])  # roll, pitch, yaw torques
+        # Actuators
+        self.actuators = [
+            Actuator(np.array([-1, 1, 0])),  # Top-left
+            Actuator(np.array([1, 1, 0])),   # Top-right
+            Actuator(np.array([-1, -1, 0])), # Bottom-left
+            Actuator(np.array([1, -1, 0]))   # Bottom-right
+        ]
 
     def compute_forces(self):
         gravity_force = np.array([0, 0, -self.mass * self.g])
         drag_force = -self.drag_coeff * self.velocity
-        thrust_force = np.array([0, 0, self.thrust])
-        
-        net_force = gravity_force + drag_force + thrust_force
-        return net_force
+        thrust_force = np.array([0, 0, np.sum([act.get_thrust() for act in self.actuators])])
+        return gravity_force + drag_force + thrust_force
 
     def update(self):
         net_force = self.compute_forces()
@@ -43,90 +45,80 @@ class DroneSimulator:
         self.position += self.velocity * self.dt
 
         # Check for ground collision
-        if self.position[2] < 20:
-            self.position[2] = 20
-            self.velocity[2] = 0  # stop any downward motion
+        if self.position[2] < 0:
+            self.position[2] = 0
+            self.velocity[2] = 0
 
-    def set_thrust(self, thrust_value):
-        self.thrust = thrust_value
-
-    def set_torque(self, roll, pitch, yaw):
-        self.torque = np.array([roll, pitch, yaw])
-        
-    def run(self, num_steps):
-        for _ in range(num_steps):
-            self.update()
-            print(f"Time: {self.dt * (_ + 1):.2f} sec | Position: {self.position}")
-
-class DroneVisualizer:
+class Drone3DMatplotlibVisualizer:
     def __init__(self, drone_sim):
         self.drone_sim = drone_sim
-        self.positions = [list(drone_sim.position)]
         
-        # Pygame setup
-        pygame.init()
-        self.screen = pygame.display.set_mode((800, 600))
-        pygame.display.set_caption('Drone Simulator')
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
         
-        # Colors
-        self.WHITE = (255, 255, 255)
-        self.RED = (255, 0, 0)
+        # Setting the axes properties
+        self.ax.set_xlim3d([-50.0, 50.0])
+        self.ax.set_ylim3d([-50.0, 50.0])
+        self.ax.set_zlim3d([0.0, 50.0])
+        self.ax.set_xlabel('X')
+        self.ax.set_ylabel('Y')
+        self.ax.set_zlabel('Z')
+        self.ax.set_title('Drone 3D Trajectory Visualization')
 
-    def update(self):
-        self.drone_sim.update()
-        self.positions.append(list(self.drone_sim.position))
+        # Initialize drone and actuator plots
+        self.drone_dot, = self.ax.plot([], [], [], 'ro', markersize=10)
+        self.actuator_dots = [self.ax.plot([], [], [], 'bo', markersize=6)[0] for _ in range(4)]
 
-    def draw(self):
-        self.screen.fill(self.WHITE)
+    def update_plot(self):
+        # Update drone position
+        x, y, z = self.drone_sim.position
+        self.drone_dot.set_data(x, y)
+        self.drone_dot.set_3d_properties(z)
         
-        # Draw the ground at the equivalent of 10 meters
-        ground_y_position = 600 - int(10 * 10)  # 10 meters * scaling factor
-        pygame.draw.line(self.screen, (0, 0, 0), (0, ground_y_position), (800, ground_y_position), 5)
+        # Update actuator positions
+        for actuator, dot in zip(self.drone_sim.actuators, self.actuator_dots):
+            x, y, z = self.drone_sim.position + actuator.position
+            dot.set_data(x, y)
+            dot.set_3d_properties(z)
 
-        # Draw the drone
-        pygame.draw.circle(self.screen, self.RED, (400, 600 - int(self.drone_sim.position[2] * 10)), 5)  # Scale for better visualization
-        pygame.display.flip()
+        plt.draw()
+        plt.pause(0.005)
 
-        # Change the rendering to show vertical movement
-        pygame.draw.circle(self.screen, self.RED, (400, 600 - int(self.drone_sim.position[2] * 10)), 5)  # Scale for better visualization
-        pygame.display.flip()
+    def key_press_callback(self, event):
+        thrust_amount = 500
 
-    def plot_trajectory(self):
-        positions = np.array(self.positions)
-        plt.figure(figsize=(10,6))
-        plt.plot(positions[:, 2], label='Z Position (Altitude)')
-        plt.xlabel('Time step')
-        plt.ylabel('Position')
-        plt.title('Drone Altitude Over Time')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        if event.key in ['1', '2', '3', '4']:
+            idx = int(event.key) - 1
+            self.drone_sim.actuators[idx].set_thrust(thrust_amount)
+        elif event.key == 'w':
+            for act in self.drone_sim.actuators:
+                act.set_thrust(thrust_amount)
+        elif event.key == 's':
+            for act in self.drone_sim.actuators:
+                act.set_thrust(-thrust_amount)
+        else:
+            for act in self.drone_sim.actuators:
+                act.set_thrust(0)
 
+    def key_release_callback(self, event):
+        if event.key in ['1', '2', '3', '4']:
+            idx = int(event.key) - 1
+            self.drone_sim.actuators[idx].set_thrust(0)
 
     def run(self):
-        clock = pygame.time.Clock()
-        running = True
-        while running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_w]:
-                self.drone_sim.set_thrust(15)
-            elif keys[pygame.K_s]:
-                self.drone_sim.set_thrust(-15)
-            else:
-                self.drone_sim.set_thrust(0)
-
-            self.update()
-            self.draw()
-            clock.tick(20)  # 20 FPS
-
-        self.plot_trajectory()
-        pygame.quit()
+        # Bind the key press event
+        self.fig.canvas.mpl_connect('key_press_event', self.key_press_callback)
+        # Bind the key release event
+        self.fig.canvas.mpl_connect('key_release_event', self.key_release_callback)
+        
+        
+        while True:
+            self.drone_sim.update()
+            self.update_plot()
+            if not plt.get_fignums():
+                break
 
 if __name__ == '__main__':
     drone_sim = DroneSimulator()
-    visualizer = DroneVisualizer(drone_sim)
+    visualizer = Drone3DMatplotlibVisualizer(drone_sim)
     visualizer.run()
