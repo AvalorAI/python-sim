@@ -1,6 +1,7 @@
 import random
 import math
 import matplotlib.pyplot as plt
+from matplotlib import gridspec
 
 class Drone:
     def __init__(self):
@@ -10,7 +11,7 @@ class Drone:
         self.drag_coefficient = 0.01
 
         # State variables
-        self.position = [0.0, 0.0, 30.0]
+        self.position = [0.0, 0.0, 0.0]
         self.velocity = [0.0, 0.0, 0.0]
         self.acceleration = [0.0, 0.0, 0.0]
         self.orientation = [0.0, 0.0, 0.0]
@@ -50,7 +51,7 @@ class Drone:
         return [net_force_x, net_force_y, net_force_z]
 
     def angular_accelerations(self):
-        # Differential thrusts for roll, pitch, and yaw based on the new actuator setup
+        
         roll_diff = (self.actuator_outputs[1] - self.actuator_outputs[0]) + (self.actuator_outputs[3] - self.actuator_outputs[2])
         pitch_diff = (self.actuator_outputs[0] + self.actuator_outputs[1]) - (self.actuator_outputs[2] + self.actuator_outputs[3])
         yaw_diff = (self.actuator_outputs[0] + self.actuator_outputs[3]) - (self.actuator_outputs[1] + self.actuator_outputs[2])
@@ -79,15 +80,15 @@ class Drone:
     def update_orientation(self, dt):
         self.orientation = [angle + omega * dt for angle, omega in zip(self.orientation, self.angular_velocity)]
 
-    def compute_forward_vector(self):
-        pitch = math.radians(self.orientation[1])
-        yaw = math.radians(self.orientation[2])
-
+    def compute_forward_vector(self, pitch, yaw, roll):
+        pitch = math.radians(pitch)
+        yaw = math.radians(yaw)
+        
         fx = math.sin(yaw) * math.cos(pitch)
         fy = -math.cos(yaw) * math.cos(pitch)
         fz = math.sin(pitch)
-
-        return [fx, fy, fz]
+        
+        return fx, fy, fz
 
     def simulate(self, dt, actuator_outputs):
         self.apply_thrust(actuator_outputs)
@@ -105,78 +106,143 @@ class Drone:
         print(f"Orientation: Roll={round(self.orientation[0], 2)}°, Pitch={round(self.orientation[1], 2)}°, Yaw={round(self.orientation[2], 2)}°")
         print("-----")
 
-    def simulate_flight(self, time, actuator_outputs):
-            dt = 0.01
-            num_steps = int(time / dt)
-            x_data = []
-            y_data = []
-            z_data = []
-            roll_data = []
-            pitch_data = []
-            yaw_data = []
-            for _ in range(num_steps):
-                self.simulate(dt, actuator_outputs)
-                x_data.append(self.position[0])
-                y_data.append(self.position[1])
-                z_data.append(self.position[2])
-                roll_data.append(self.orientation[0])
-                pitch_data.append(self.orientation[1])
-                yaw_data.append(self.orientation[2])
+    def simulate_flight(self, actuator_sequences, durations):
+        dt = 0.01
+        total_time = sum(durations)
+        num_steps = int(total_time / dt)
+        x_data = []
+        y_data = []
+        z_data = []
+        roll_data = []
+        pitch_data = []
+        yaw_data = []
+        elapsed_time = 0
 
-            return x_data, y_data, z_data, roll_data, pitch_data, yaw_data
+        vx_data = []
+        vy_data = []
+        vz_data = []
+        omega_roll_data = []
+        omega_pitch_data = []
+        omega_yaw_data = []
+        alpha_roll_data = []
+        alpha_pitch_data = []
+        alpha_yaw_data = []
+
+        for step in range(num_steps):
+            # Update actuator outputs based on elapsed time
+            accumulated_duration = 0
+            for idx, duration in enumerate(durations):
+                accumulated_duration += duration
+                if elapsed_time < accumulated_duration:
+                    self.simulate(dt, actuator_sequences[idx])
+                    break
+
+            x_data.append(self.position[0])
+            y_data.append(self.position[1])
+            z_data.append(self.position[2])
+            roll_data.append(self.orientation[0])
+            pitch_data.append(self.orientation[1])
+            yaw_data.append(self.orientation[2])
+            elapsed_time += dt
+
+            vx_data.append(self.velocity[0])
+            vy_data.append(self.velocity[1])
+            vz_data.append(self.velocity[2])
+            omega_roll_data.append(self.angular_velocity[0])
+            omega_pitch_data.append(self.angular_velocity[1])
+            omega_yaw_data.append(self.angular_velocity[2])
+            alpha_roll_data.append(self.angular_acceleration[0])
+            alpha_pitch_data.append(self.angular_acceleration[1])
+            alpha_yaw_data.append(self.angular_acceleration[2])
+
+        return x_data, y_data, z_data, roll_data, pitch_data, yaw_data, vx_data, vy_data, vz_data, omega_roll_data, omega_pitch_data, omega_yaw_data, alpha_roll_data, alpha_pitch_data, alpha_yaw_data
+
 
 def main():
     # Create a drone instance
     drone = Drone()
 
-    # Define simulation parameters
-    simulation_time = 10  # seconds
+# Define simulation parameters
+    simulation_time = 20  # seconds
     
     # Assuming position data every 0.01 seconds
     time_data = [i*0.01 for i in range(int(simulation_time/0.01))]
 
-    hover_thrust_per_motor = 2.45 * drone.mass * 9.81  # Adjusted thrust for stability
-    yaw_factor = 0.000001
+    hover_thrust_per_motor = 2.5 * drone.mass * 9.81  # Adjusted thrust for stability
+    neutral_thrust_per_motor = 0
 
-    actuator_outputs = [
-        hover_thrust_per_motor * (1.0),  # Front-left (CCW) increased
-        hover_thrust_per_motor * (1.5),  # Front-right (CW) decreased
-        hover_thrust_per_motor * (0.95),  # Rear-left (CCW) increased
-        hover_thrust_per_motor * (1.05)   # Rear-right (CW) decreased
-    ]
+    # Define actuator outputs for each phase
+    ascent_outputs = [hover_thrust_per_motor * 1.1] * 4  
+    hover_outputs = [hover_thrust_per_motor] * 4
+    descent_outputs = [hover_thrust_per_motor * 0.9] * 4
+
+    # Create actuator sequences and durations lists
+    actuator_sequences = [ascent_outputs, [20,10,0,50], ascent_outputs, [0,0,0,0]]
+    durations = [5, 5, 5, 5]  # Assuming each phase lasts 5 seconds
 
     # Simulate the flight and get position and orientation data
-    x_data, y_data, z_data, roll_data, pitch_data, yaw_data = drone.simulate_flight(simulation_time, actuator_outputs)
+    x_data, y_data, z_data, roll_data, pitch_data, yaw_data, vx_data, vy_data, vz_data, omega_roll_data, omega_pitch_data, omega_yaw_data, alpha_roll_data, alpha_pitch_data, alpha_yaw_data = drone.simulate_flight(actuator_sequences, durations)
+
+
+    # Create a GridSpec layout
+    fig = plt.figure(figsize=(12, 10))
+    gs = gridspec.GridSpec(4, 2, width_ratios=[2, 1])
 
     # 3D plot for drone's movement
-    fig1 = plt.figure()
-    ax1 = fig1.add_subplot(111, projection='3d')
+    ax1 = fig.add_subplot(gs[0, 0], projection='3d')
     ax1.plot(x_data, y_data, z_data)
-
-    # plot the forward vector (for demonstration, we plot it for every 10th point)
-    for i in range(0, len(x_data), 10):
-        drone.position = [x_data[i], y_data[i], z_data[i]]
-        drone.orientation = [roll_data[i], pitch_data[i], yaw_data[i]]
-        fx, fy, fz = drone.compute_forward_vector()
-        ax1.quiver(x_data[i], y_data[i], z_data[i], fx, fy, fz, color="red", length=2.0)
 
     ax1.set_xlabel('X Position (m)')
     ax1.set_ylabel('Y Position (m)')
     ax1.set_zlabel('Altitude (m)')
     ax1.set_title('Quadcopter 3D Flight Path')
 
-    # Plotting the orientation data
-    fig2, (ax2, ax3, ax4) = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
+    # Altitude plot
+    ax5 = fig.add_subplot(gs[0, 1])
+    ax5.plot(time_data, z_data)
+    ax5.set_xlabel('Time (s)')
+    ax5.set_ylabel('Altitude (m)')
+    ax5.set_title('Drone Altitude over Time')
+
+    # Orientation data plots
+    ax2 = fig.add_subplot(gs[1, 0], sharex=ax5)
     ax2.plot(time_data, roll_data)
     ax2.set_ylabel('Roll (°)')
-    ax2.set_title('Drone Orientation over Time')
+    ax2.set_title('Roll Orientation over Time')
 
+    ax3 = fig.add_subplot(gs[1, 1], sharex=ax5)
     ax3.plot(time_data, pitch_data)
     ax3.set_ylabel('Pitch (°)')
+    ax3.set_title('Pitch Orientation over Time')
 
+    ax4 = fig.add_subplot(gs[2, 0], sharex=ax5)  # Use both columns for the yaw data
     ax4.plot(time_data, yaw_data)
-    ax4.set_xlabel('Time (s)')
     ax4.set_ylabel('Yaw (°)')
+    ax4.set_title('Yaw Orientation over Time')
+
+    ax6 = fig.add_subplot(gs[2, 1])
+    ax6.plot(time_data, vx_data, label="Vx")
+    ax6.plot(time_data, vy_data, label="Vy")
+    ax6.plot(time_data, vz_data, label="Vz")
+    ax6.set_ylabel('Velocity (m/s)')
+    ax6.set_title('Linear Velocity over Time')
+    ax6.legend()
+
+    ax7 = fig.add_subplot(gs[3, 0])
+    ax7.plot(time_data, omega_roll_data, label="Roll")
+    ax7.plot(time_data, omega_pitch_data, label="Pitch")
+    ax7.plot(time_data, omega_yaw_data, label="Yaw")
+    ax7.set_ylabel('Angular Velocity (rad/s)')
+    ax7.set_title('Angular Velocity over Time')
+    ax7.legend()
+
+    ax8 = fig.add_subplot(gs[3, 1])
+    ax8.plot(time_data, alpha_roll_data, label="Roll")
+    ax8.plot(time_data, alpha_pitch_data, label="Pitch")
+    ax8.plot(time_data, alpha_yaw_data, label="Yaw")
+    ax8.set_ylabel('Angular Acceleration (rad/s^2)')
+    ax8.set_title('Angular Acceleration over Time')
+    ax8.legend()
 
     plt.tight_layout()
     plt.show()
