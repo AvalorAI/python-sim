@@ -18,7 +18,7 @@ class Drone:
         self.angular_acceleration = [0.0, 0.0, 0.0]
 
         # Control variables
-        self.actuator_outputs = [0.0, 0.0, 0.0, 0.0]  # [front, right, rear, left]
+        self.actuator_outputs = [0.0, 0.0, 0.0, 0.0]  # [front-left, front-right, rear-left, rear-right]
 
     def apply_thrust(self, actuator_outputs):
         self.actuator_outputs = actuator_outputs
@@ -37,10 +37,11 @@ class Drone:
         total_drag = self.compute_drag()
         total_gravity = self.compute_gravity()
 
-        # Decompose thrust based on orientation (pitch, roll, yaw)
+        # Decompose thrust based on orientation (pitch, roll, yaw) and the new actuator setup
         thrust_x = total_thrust_magnitude * math.sin(self.orientation[1])  # sin(pitch)
         thrust_y = -total_thrust_magnitude * math.sin(self.orientation[0])  # -sin(roll)
         thrust_z = total_thrust_magnitude * math.cos(self.orientation[0]) * math.cos(self.orientation[1])  # cos(roll)*cos(pitch)
+
         
         net_force_x = thrust_x + total_drag[0]
         net_force_y = thrust_y + total_drag[1]
@@ -49,10 +50,10 @@ class Drone:
         return [net_force_x, net_force_y, net_force_z]
 
     def angular_accelerations(self):
-        # Differential thrusts for roll, pitch, and yaw
-        roll_diff = self.actuator_outputs[1] - self.actuator_outputs[3]  # Right - Left
-        pitch_diff = self.actuator_outputs[0] - self.actuator_outputs[2]  # Front - Rear
-        yaw_diff = (self.actuator_outputs[0] + self.actuator_outputs[1]) - (self.actuator_outputs[2] + self.actuator_outputs[3])  # Assuming opposite propellers spin in opposite directions
+        # Differential thrusts for roll, pitch, and yaw based on the new actuator setup
+        roll_diff = (self.actuator_outputs[1] - self.actuator_outputs[0]) + (self.actuator_outputs[3] - self.actuator_outputs[2])
+        pitch_diff = (self.actuator_outputs[0] + self.actuator_outputs[1]) - (self.actuator_outputs[2] + self.actuator_outputs[3])
+        yaw_diff = (self.actuator_outputs[0] + self.actuator_outputs[3]) - (self.actuator_outputs[1] + self.actuator_outputs[2])
 
         roll_acceleration = roll_diff / self.mass
         pitch_acceleration = pitch_diff / self.mass
@@ -124,14 +125,14 @@ def main():
     # Assuming position data every 0.01 seconds
     time_data = [i*0.01 for i in range(int(simulation_time/0.01))]
 
-    hover_thrust_per_motor = 2.5 * drone.mass * 9.81  # This is per motor for hovering
+    hover_thrust_per_motor = 2.45 * drone.mass * 9.81  # Adjusted thrust for stability
     yaw_factor = 0.000001
 
     actuator_outputs = [
-        hover_thrust_per_motor * (1 + yaw_factor),  # Front-left (CCW) increased
-        hover_thrust_per_motor * (1 - yaw_factor),  # Front-right (CW) decreased
-        hover_thrust_per_motor * (1 - yaw_factor),  # Rear-right (CW) decreased
-        hover_thrust_per_motor * (1 + yaw_factor)   # Rear-left (CCW) increased
+        hover_thrust_per_motor * (1.0),  # Front-left (CCW) increased
+        hover_thrust_per_motor * (1.0),  # Front-right (CW) decreased
+        hover_thrust_per_motor * (1.0),  # Rear-left (CCW) increased
+        hover_thrust_per_motor * (1.05)   # Rear-right (CW) decreased
     ]
 
     # Simulate the flight and get position and orientation data
