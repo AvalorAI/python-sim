@@ -79,6 +79,16 @@ class Drone:
     def update_orientation(self, dt):
         self.orientation = [angle + omega * dt for angle, omega in zip(self.orientation, self.angular_velocity)]
 
+    def compute_forward_vector(self):
+        pitch = math.radians(self.orientation[1])
+        yaw = math.radians(self.orientation[2])
+
+        fx = math.sin(yaw) * math.cos(pitch)
+        fy = -math.cos(yaw) * math.cos(pitch)
+        fz = math.sin(pitch)
+
+        return [fx, fy, fz]
+
     def simulate(self, dt, actuator_outputs):
         self.apply_thrust(actuator_outputs)
         self.update_acceleration()
@@ -130,8 +140,8 @@ def main():
 
     actuator_outputs = [
         hover_thrust_per_motor * (1.0),  # Front-left (CCW) increased
-        hover_thrust_per_motor * (1.0),  # Front-right (CW) decreased
-        hover_thrust_per_motor * (1.0),  # Rear-left (CCW) increased
+        hover_thrust_per_motor * (1.5),  # Front-right (CW) decreased
+        hover_thrust_per_motor * (0.95),  # Rear-left (CCW) increased
         hover_thrust_per_motor * (1.05)   # Rear-right (CW) decreased
     ]
 
@@ -142,6 +152,14 @@ def main():
     fig1 = plt.figure()
     ax1 = fig1.add_subplot(111, projection='3d')
     ax1.plot(x_data, y_data, z_data)
+
+    # plot the forward vector (for demonstration, we plot it for every 10th point)
+    for i in range(0, len(x_data), 10):
+        drone.position = [x_data[i], y_data[i], z_data[i]]
+        drone.orientation = [roll_data[i], pitch_data[i], yaw_data[i]]
+        fx, fy, fz = drone.compute_forward_vector()
+        ax1.quiver(x_data[i], y_data[i], z_data[i], fx, fy, fz, color="red", length=2.0)
+
     ax1.set_xlabel('X Position (m)')
     ax1.set_ylabel('Y Position (m)')
     ax1.set_zlabel('Altitude (m)')
