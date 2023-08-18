@@ -1,4 +1,5 @@
 numpy
-pygame
 pymavlink
 matplotlib
+scipy
+pynput

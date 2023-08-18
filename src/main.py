@@ -1,124 +1,166 @@
-import numpy as np
+import random
+import math
 import matplotlib.pyplot as plt
 
-class Actuator:
-    def __init__(self, position):
-        self.thrust = 0.0
-        self.position = position
-
-    def set_thrust(self, thrust):
-        self.thrust = thrust
-
-    def get_thrust(self):
-        return self.thrust
-
-class DroneSimulator:
+class Drone:
     def __init__(self):
-        # Constants
-        self.g = 9.81  # gravitational acceleration
-        self.mass = 10.0  # mass of the drone in kg
-        self.dt = 0.01  # time step
-        self.drag_coeff = 0.01
+        # Drone properties
+        self.mass = 1.0
+        self.thrust_coefficient = 0.1
+        self.drag_coefficient = 0.01
+
+        # State variables
+        self.position = [0.0, 0.0, 30.0]
+        self.velocity = [0.0, 0.0, 0.0]
+        self.acceleration = [0.0, 0.0, 0.0]
+        self.orientation = [0.0, 0.0, 0.0]
+        self.angular_velocity = [0.0, 0.0, 0.0]
+        self.angular_acceleration = [0.0, 0.0, 0.0]
+
+        # Control variables
+        self.actuator_outputs = [0.0, 0.0, 0.0, 0.0]  # [front, right, rear, left]
+
+    def apply_thrust(self, actuator_outputs):
+        self.actuator_outputs = actuator_outputs
+
+    def compute_drag(self):
+        velocity_magnitude = math.sqrt(sum(v ** 2 for v in self.velocity))
+        drag_force = [-self.drag_coefficient * v * velocity_magnitude for v in self.velocity]
+        return drag_force
+
+    def compute_gravity(self):
+        gravity_force = [0.0, 0.0, -self.mass * 9.81]
+        return gravity_force
+
+    def compute_net_force(self):
+        total_thrust_magnitude = sum([self.thrust_coefficient * output for output in self.actuator_outputs])
+        total_drag = self.compute_drag()
+        total_gravity = self.compute_gravity()
+
+        # Decompose thrust based on orientation (pitch, roll, yaw)
+        thrust_x = total_thrust_magnitude * math.sin(self.orientation[1])  # sin(pitch)
+        thrust_y = -total_thrust_magnitude * math.sin(self.orientation[0])  # -sin(roll)
+        thrust_z = total_thrust_magnitude * math.cos(self.orientation[0]) * math.cos(self.orientation[1])  # cos(roll)*cos(pitch)
         
-        # Initial State
-        self.position = np.array([0.0, 0.0, 30.0])
-        self.velocity = np.array([0.0, 0.0, 0.0])
-
-        # Actuators
-        self.actuators = [
-            Actuator(np.array([-1, 1, 0])),  # Top-left
-            Actuator(np.array([1, 1, 0])),   # Top-right
-            Actuator(np.array([-1, -1, 0])), # Bottom-left
-            Actuator(np.array([1, -1, 0]))   # Bottom-right
-        ]
-
-    def compute_forces(self):
-        gravity_force = np.array([0, 0, -self.mass * self.g])
-        drag_force = -self.drag_coeff * self.velocity
-        thrust_force = np.array([0, 0, np.sum([act.get_thrust() for act in self.actuators])])
-        return gravity_force + drag_force + thrust_force
-
-    def update(self):
-        net_force = self.compute_forces()
-        acceleration = net_force / self.mass
-        self.velocity += acceleration * self.dt
-        self.position += self.velocity * self.dt
-
-        # Check for ground collision
-        if self.position[2] < 0:
-            self.position[2] = 0
-            self.velocity[2] = 0
-
-class Drone3DMatplotlibVisualizer:
-    def __init__(self, drone_sim):
-        self.drone_sim = drone_sim
+        net_force_x = thrust_x + total_drag[0]
+        net_force_y = thrust_y + total_drag[1]
+        net_force_z = thrust_z + total_drag[2] + total_gravity[2]
         
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111, projection='3d')
-        
-        # Setting the axes properties
-        self.ax.set_xlim3d([-50.0, 50.0])
-        self.ax.set_ylim3d([-50.0, 50.0])
-        self.ax.set_zlim3d([0.0, 50.0])
-        self.ax.set_xlabel('X')
-        self.ax.set_ylabel('Y')
-        self.ax.set_zlabel('Z')
-        self.ax.set_title('Drone 3D Trajectory Visualization')
+        return [net_force_x, net_force_y, net_force_z]
 
-        # Initialize drone and actuator plots
-        self.drone_dot, = self.ax.plot([], [], [], 'ro', markersize=10)
-        self.actuator_dots = [self.ax.plot([], [], [], 'bo', markersize=6)[0] for _ in range(4)]
+    def angular_accelerations(self):
+        # Differential thrusts for roll, pitch, and yaw
+        roll_diff = self.actuator_outputs[1] - self.actuator_outputs[3]  # Right - Left
+        pitch_diff = self.actuator_outputs[0] - self.actuator_outputs[2]  # Front - Rear
+        yaw_diff = (self.actuator_outputs[0] + self.actuator_outputs[1]) - (self.actuator_outputs[2] + self.actuator_outputs[3])  # Assuming opposite propellers spin in opposite directions
 
-    def update_plot(self):
-        # Update drone position
-        x, y, z = self.drone_sim.position
-        self.drone_dot.set_data(x, y)
-        self.drone_dot.set_3d_properties(z)
-        
-        # Update actuator positions
-        for actuator, dot in zip(self.drone_sim.actuators, self.actuator_dots):
-            x, y, z = self.drone_sim.position + actuator.position
-            dot.set_data(x, y)
-            dot.set_3d_properties(z)
+        roll_acceleration = roll_diff / self.mass
+        pitch_acceleration = pitch_diff / self.mass
+        yaw_acceleration = yaw_diff / self.mass
 
-        plt.draw()
-        plt.pause(0.005)
+        return [roll_acceleration, pitch_acceleration, yaw_acceleration]
 
-    def key_press_callback(self, event):
-        thrust_amount = 500
+    def update_acceleration(self):
+        self.acceleration = [force / self.mass for force in self.compute_net_force()]
 
-        if event.key in ['1', '2', '3', '4']:
-            idx = int(event.key) - 1
-            self.drone_sim.actuators[idx].set_thrust(thrust_amount)
-        elif event.key == 'w':
-            for act in self.drone_sim.actuators:
-                act.set_thrust(thrust_amount)
-        elif event.key == 's':
-            for act in self.drone_sim.actuators:
-                act.set_thrust(-thrust_amount)
-        else:
-            for act in self.drone_sim.actuators:
-                act.set_thrust(0)
+    def update_velocity(self, dt):
+        self.velocity = [v + a * dt for v, a in zip(self.velocity, self.acceleration)]
 
-    def key_release_callback(self, event):
-        if event.key in ['1', '2', '3', '4']:
-            idx = int(event.key) - 1
-            self.drone_sim.actuators[idx].set_thrust(0)
+    def update_position(self, dt):
+        self.position = [p + v * dt for p, v in zip(self.position, self.velocity)]
 
-    def run(self):
-        # Bind the key press event
-        self.fig.canvas.mpl_connect('key_press_event', self.key_press_callback)
-        # Bind the key release event
-        self.fig.canvas.mpl_connect('key_release_event', self.key_release_callback)
-        
-        
-        while True:
-            self.drone_sim.update()
-            self.update_plot()
-            if not plt.get_fignums():
-                break
+    def update_angular_acceleration(self):
+        self.angular_acceleration = self.angular_accelerations()
 
-if __name__ == '__main__':
-    drone_sim = DroneSimulator()
-    visualizer = Drone3DMatplotlibVisualizer(drone_sim)
-    visualizer.run()
+    def update_angular_velocity(self, dt):
+        self.angular_velocity = [w + alpha * dt for w, alpha in zip(self.angular_velocity, self.angular_acceleration)]
+
+    def update_orientation(self, dt):
+        self.orientation = [angle + omega * dt for angle, omega in zip(self.orientation, self.angular_velocity)]
+
+    def simulate(self, dt, actuator_outputs):
+        self.apply_thrust(actuator_outputs)
+        self.update_acceleration()
+        self.update_velocity(dt)
+        self.update_position(dt)
+
+        self.update_angular_acceleration()
+        self.update_angular_velocity(dt)
+        self.update_orientation(dt)
+
+        # Print position and orientation for debugging
+        print(f"Time: {round(dt, 2)}s")
+        print(f"Position: X={round(self.position[0], 2)}m, Y={round(self.position[1], 2)}m, Z={round(self.position[2], 2)}m")
+        print(f"Orientation: Roll={round(self.orientation[0], 2)}°, Pitch={round(self.orientation[1], 2)}°, Yaw={round(self.orientation[2], 2)}°")
+        print("-----")
+
+    def simulate_flight(self, time, actuator_outputs):
+            dt = 0.01
+            num_steps = int(time / dt)
+            x_data = []
+            y_data = []
+            z_data = []
+            roll_data = []
+            pitch_data = []
+            yaw_data = []
+            for _ in range(num_steps):
+                self.simulate(dt, actuator_outputs)
+                x_data.append(self.position[0])
+                y_data.append(self.position[1])
+                z_data.append(self.position[2])
+                roll_data.append(self.orientation[0])
+                pitch_data.append(self.orientation[1])
+                yaw_data.append(self.orientation[2])
+
+            return x_data, y_data, z_data, roll_data, pitch_data, yaw_data
+
+def main():
+    # Create a drone instance
+    drone = Drone()
+
+    # Define simulation parameters
+    simulation_time = 10  # seconds
+    
+    # Assuming position data every 0.01 seconds
+    time_data = [i*0.01 for i in range(int(simulation_time/0.01))]
+
+    hover_thrust_per_motor = 2.5 * drone.mass * 9.81  # This is per motor for hovering
+    yaw_factor = 0.000001
+
+    actuator_outputs = [
+        hover_thrust_per_motor * (1 + yaw_factor),  # Front-left (CCW) increased
+        hover_thrust_per_motor * (1 - yaw_factor),  # Front-right (CW) decreased
+        hover_thrust_per_motor * (1 - yaw_factor),  # Rear-right (CW) decreased
+        hover_thrust_per_motor * (1 + yaw_factor)   # Rear-left (CCW) increased
+    ]
+
+    # Simulate the flight and get position and orientation data
+    x_data, y_data, z_data, roll_data, pitch_data, yaw_data = drone.simulate_flight(simulation_time, actuator_outputs)
+
+    # 3D plot for drone's movement
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111, projection='3d')
+    ax1.plot(x_data, y_data, z_data)
+    ax1.set_xlabel('X Position (m)')
+    ax1.set_ylabel('Y Position (m)')
+    ax1.set_zlabel('Altitude (m)')
+    ax1.set_title('Quadcopter 3D Flight Path')
+
+    # Plotting the orientation data
+    fig2, (ax2, ax3, ax4) = plt.subplots(3, 1, sharex=True, figsize=(10, 8))
+    ax2.plot(time_data, roll_data)
+    ax2.set_ylabel('Roll (°)')
+    ax2.set_title('Drone Orientation over Time')
+
+    ax3.plot(time_data, pitch_data)
+    ax3.set_ylabel('Pitch (°)')
+
+    ax4.plot(time_data, yaw_data)
+    ax4.set_xlabel('Time (s)')
+    ax4.set_ylabel('Yaw (°)')
+
+    plt.tight_layout()
+    plt.show()
+    
+if __name__ == "__main__":
+    main()
