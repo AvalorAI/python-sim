@@ -8,12 +8,13 @@ This script simulates the dynamics of a quadcopter in a 3D environment. By integ
 ## Setup
 
 1. Get PX4-Autopilot from https://github.com/PX4/PX4-Autopilot.git
-2. Build PX4 in Tools/setup/ubuntu.sh
-3. Open ports 4560 and 14540
+2. Build PX4 in `Tools/setup/ubuntu.sh`
+3. Open ports 4560 and 14540 (or disable firewall of you are lazy)
 4. Open wsl terminal in PX4 folder
-5. run `export PX4_SIM_HOST_ADDR=172.28.112.1` (use ipconfig in Windows to recover WSL ip on local machine)
-6. First, in python-sim/src run `py mavlink_connector.py`
-7. Then, run `make px4_sitl none_iris`
+5. Run `ipconfig` on your Windows machine to find the WSL_IP
+6. In your WSL terminal run `export PX4_SIM_HOST_ADDR=${WSL_IP}`
+7. On your Windows machine, in python-sim/src run `py mavlink_connector.py`
+8. Then, run `make px4_sitl none_iris`
 
 This should connect the simulator to the python file. 
 
@@ -74,3 +75,6 @@ This function updates the quadcopter's state using the 4th order Runge-Kutta (RK
 ## **Usage:**
 
 To use the simulator, one needs to call the `update_state_rk4` function iteratively with the current state, actuator values, and a time step `dt`. The updated state can be stored in the `history` dictionary for visualization or further analysis.
+
+
+
