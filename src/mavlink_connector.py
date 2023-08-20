@@ -1,75 +1,96 @@
 import time
 import logging
 from pymavlink import mavutil
-from models import Drone
-from visualizer import Drone3DMatplotlibVisualizer
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+vehicle = None
+n = 0
 
 class MavlinkConnector:
     def __init__(self):
         self.vehicle = None
 
     def setup_mavlink_connection(self):
-        try:
-            self.vehicle = mavutil.mavlink_connection('tcpin:172.20.160.1:4560')
-            self.vehicle.wait_heartbeat()
-            logging.info("Heartbeat from system (system %u component %u)", self.vehicle.target_system, self.vehicle.target_component)
-        except Exception as e:
-            logging.error("Error establishing MAVLink connection: %s", str(e))
-        return self.vehicle
 
-    def send_mavlink_messages(self, drone):
-            try:
-                 
-                # For demonstration, populate the hil_state_quaternion message
-                hil_state_quaternion = {
-                    'time_usec': int(time.time() * 1e6),
-                    'attitude_quaternion': list(int(drone.quaternion.as_quat())),
-                    'rollspeed': 0,  # Update if you implement rotational dynamics
-                    'pitchspeed': 0,
-                    'yawspeed': 0,
-                    'lat': 0,  # Placeholder
-                    'lon': 0,
-                    'alt': int(drone.position[2]),
-                    'vx': int(drone.velocity[0]),
-                    'vy': int(drone.velocity[1]),
-                    'vz': int(drone.velocity[2]),
-                    'ind_airspeed': 0,  # Placeholder
-                    'true_airspeed': 0,  # Placeholder
-                    'xacc': 0,  # Placeholder for acceleration data
-                    'yacc': 0,
-                    'zacc': 0,
-                }
+        global vehicle
+        global n
+        
+        print("Waiting to connect...")
+        vehicle = mavutil.mavlink_connection('tcpin:172.29.64.1:4560')
+        
+        msg = vehicle.recv_match(blocking = True)
+        if msg.get_type() != "COMMAND_LONG":
+            raise Exception("error")
+        n += 1
+        print(n, "<== IN: ", msg)
+        
+        msg = vehicle.recv_match(blocking = True)
+        if msg.get_type() != "HEARTBEAT":
+            raise Exception("error")
+        n += 1
+        print(n, "<== IN", msg)
+    
 
-                # Send the message
-                self.vehicle.mav.hil_state_quaternion_send(**hil_state_quaternion)
-                logging.debug("Sent hil_state_quaternion message: %s", str(hil_state_quaternion))
+def send_data():
+    whatever = True
 
-                # TODO: populate other messages
+time_absolute_seconds = time.time()
+time_absolute_microseconds = round(time_absolute_seconds * 1e6)
+time_boot_microseconds = round(time_absolute_microseconds - 30e6)
 
-                hil_sensor = {}
-                hil_gps = {}
-                hil_optical_flow = {}
-                hil_rc_inputs_raw = {}
+# Test the heartbeat function
+connector = MavlinkConnector()
+connector.setup_mavlink_connection()
 
-                self.vehicle.mav.hil_sensor_send(**hil_sensor)
-                self.vehicle.mav.hil_gps_send(**hil_gps)
-                self.vehicle.mav.hil_optical_flow_send(**hil_optical_flow)
-                self.vehicle.mav.hil_rc_inputs_raw_send(**hil_rc_inputs_raw)
+while True:
+    
+    t__microseconds = time_absolute_microseconds - time_boot_microseconds
+    t__seconds = t__microseconds / 1e6
+    
+    send_data()
 
-            except Exception as e:
-                logging.error("Error sending MAVLink message: %s", str(e))
-            
+    if t__seconds % 1000000 == 0:
+        n += 1
+        
+        the_type        = 0     # Vehicle or component type. For a flight controller component the vehicle type (quadrotor, helicopter, etc.). For other components the component type (e.g. camera, gimbal, etc.). This should be used in preference to component id for identifying the component type. (type:uint8_t, values:MAV_TYPE)
+        autopilot       = 0     # Autopilot type / class. Use MAV_AUTOPILOT_INVALID for components that are not flight controllers. (type:uint8_t, values:MAV_AUTOPILOT)
+        base_mode       = 0     # System mode bitmap. (type:uint8_t, values:MAV_MODE_FLAG)
+        custom_mode     = 0     # A bitfield for use for autopilot-specific flags (type:uint32_t)
+        system_status   = 0     # System status flag. (type:uint8_t, values:MAV_STATE)
+        mavlink_version = 3     # MAVLink version, not writable by user, gets added by protocol because of magic data type          , # uint8_t_mavlink_version (type:uint8_t)
+        
+        if vehicle != None:
+            vehicle.mav.heartbeat_send(
+                type                = the_type          , 
+                autopilot           = autopilot         , 
+                base_mode           = base_mode         , 
+                custom_mode         = custom_mode       , 
+                system_status       = system_status     , 
+                mavlink_version     = mavlink_version   , 
+            )
+        
+        print (n, "OUT: --> HEARTBEAT {",
+            "type :"                , the_type,
+            ",",
+            "autopilot :"           , autopilot,
+            ",",
+            "base_mode :"           , base_mode,
+            ",",
+            "custom_mode :"         , custom_mode,
+            ",",
+            "system_status :"       , system_status,
+            ",",
+            "mavlink_version :"     , mavlink_version,
+        "}")
 
-    def receive_mavlink_messages(self, drone):
-            try:
-                # Listen for the HIL_ACTUATOR_CONTROLS message
-                msg = self.vehicle.recv_match(type='HIL_ACTUATOR_CONTROLS', blocking=True)
-                if msg:
-                    logging.debug("Received HIL_ACTUATOR_CONTROLS message: %s", str(msg))
-                    for i, act in enumerate(drone.actuators):
-                        act.set_thrust(msg.controls[i] * drone.mass * drone.g / 4.0)
-            except Exception as e:
-                 logging.error("Error receiving MAVLink message: %s", str(e))
+    if vehicle != None:
+        msg = vehicle.recv_match(blocking = False)
+        if msg != None:
+            n += 1
+            print(n, "<== IN: ", msg)
+    
+    
+    time_absolute_microseconds += 100

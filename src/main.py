@@ -31,9 +31,9 @@ force_history = []
 def forces_from_actuators(actuators):
     f_total = sum(actuators)
     torques = np.array([
-        (actuators[1] - actuators[3]) * l * k, # Roll
-        (actuators[0] - actuators[2]) * l * k, # Pitch
-        (actuators[0] + actuators[2] - actuators[1] - actuators[3]) * kd # Yaw
+        ((actuators[0] + actuators[3]) - (actuators[1] + actuators[2])) * l * k,  # Roll
+        ((actuators[0] + actuators[1]) - (actuators[2] + actuators[3])) * l * k,  # Pitch
+        (actuators[0] - actuators[1] + actuators[2] - actuators[3]) * kd          # Yaw
     ])
     return f_total, torques
 
@@ -123,16 +123,16 @@ def save_flight_data_to_csv(history, filename="flight_data.csv"):
 dt = 0.01
 duration_per_phase = 200  # For example, each phase lasts for 10 seconds.
 
-# Actuator configurations F, L, B, R
+# Actuator configurations FR, FL, RF, RR
 take_off = [0.6, 0.6, 0.6, 0.6]
 hover = [0.5, 0.5, 0.5, 0.5]
-forward_flight = [0.589, 0.59, 0.591, 0.59]
+forward_flight = [0.5, 0.5, 0.51, 0.51]
 roll = [0.5, 0.6, 0.5, 0.5]
 brake =  [0.591, 0.59, 0.589, 0.59]
 heading_change = [0.48, 0.5, 0.52, 0.5]  
 descent = [0.4, 0.4, 0.4, 0.4]
 
-phases = ['take_off', 'descent', 'hover', 'roll']
+phases = ['take_off', 'descent', 'hover', 'forward_flight']
 actuator_configs = {
     'take_off': take_off,
     'hover': hover,

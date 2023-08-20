@@ -112,7 +112,7 @@ def Connect():
     global n
     
     print("Waiting to connect...")
-    vehicle = mavutil.mavlink_connection('tcpin:172.20.160.1:4560')
+    vehicle = mavutil.mavlink_connection('tcpin:172.29.64.1:4560')
     
     msg = vehicle.recv_match(blocking = True)
     if msg.get_type() != "COMMAND_LONG":
@@ -150,26 +150,26 @@ while True:
     # SYSTEM_TIME
     #
     
-    if t__us % 4000000 == 0:
-        n += 1
+    # if t__us % 4000000 == 0:
+    #     n += 1
         
-        since_boot__us = t_abs__us - t_boot__us
-        since_boot__ms = round(since_boot__us / 1000)
+    #     since_boot__us = t_abs__us - t_boot__us
+    #     since_boot__ms = round(since_boot__us / 1000)
         
-        time_unix_usec      = t_abs__us
-        time_boot_ms        = since_boot__ms
+    #     time_unix_usec      = t_abs__us
+    #     time_boot_ms        = since_boot__ms
         
-        if vehicle != None:
-            vehicle.mav.system_time_send(
-                time_unix_usec  = time_unix_usec        , # Timestamp (UNIX epoch time). [us] (type:uint64_t)
-                time_boot_ms    = time_boot_ms          , # Timestamp (time since system boot). [ms] (type:uint32_t)
-            )
+    #     if vehicle != None:
+    #         vehicle.mav.system_time_send(
+    #             time_unix_usec  = time_unix_usec        , # Timestamp (UNIX epoch time). [us] (type:uint64_t)
+    #             time_boot_ms    = time_boot_ms          , # Timestamp (time since system boot). [ms] (type:uint32_t)
+    #         )
         
-        print (n, "--> SYSTEM_TIME {",
-            "time_unix_usec :", time_unix_usec,
-            ",",
-            "time_boot_ms :", time_boot_ms,
-        "}")
+    #     print (n, "--> SYSTEM_TIME {",
+    #         "time_unix_usec :", time_unix_usec,
+    #         ",",
+    #         "time_boot_ms :", time_boot_ms,
+    #     "}")
     
     
     #
