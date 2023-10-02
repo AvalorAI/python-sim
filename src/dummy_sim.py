@@ -22,6 +22,8 @@ import time
 import atexit
 from random import random
 from pymavlink import mavutil
+import matplotlib.pyplot as plt
+import numpy as np
 
 # =========================================================
 # =========================================================
@@ -112,7 +114,7 @@ def Connect():
     global n
     
     print("Waiting to connect...")
-    vehicle = mavutil.mavlink_connection('tcpin:172.29.64.1:4560')
+    vehicle = mavutil.mavlink_connection('tcpin:172.19.176.1:4560')
     
     msg = vehicle.recv_match(blocking = True)
     if msg.get_type() != "COMMAND_LONG":
@@ -137,6 +139,152 @@ t_abs__s    = time.time()
 
 t_abs__us   = round(t_abs__s * 1e6)
 t_boot__us  = round(t_abs__us - 30e6)
+
+# Create a 3D axis
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+ax.set_title('Drone 3D Trajectory')
+
+# Set limits for your plot (change these as per your needs)
+ax.set_xlim([-10, 10])
+ax.set_ylim([-10, 10])
+ax.set_zlim([0, 20])
+
+dt = 0.0001
+
+# Constants
+g = 9.81
+m = 1.0
+l = 0.5
+k = 4.905
+kd = 0.1
+GROUND_LEVEL = 0
+SIMULATION_TIME = 360
+dt = 0.0001
+
+# Initialize State and History for Visualization
+state = {
+    'x': 0,
+    'y': 0,
+    'z': 0,
+    'v_x': 0,
+    'v_y': 0,
+    'v_z': 0,
+    'roll': 0,
+    'pitch': 0,
+    'yaw': 0,
+    'angular_v': np.array([0, 0, 0])
+}
+    
+def forces_from_actuators(actuators):
+    f_total = sum(actuators)
+    torques = np.array([
+        ((actuators[0] + actuators[3]) - (actuators[1] + actuators[2])) * l * k,  # Roll
+        ((actuators[0] + actuators[1]) - (actuators[2] + actuators[3])) * l * k,  # Pitch
+        (actuators[0] - actuators[1] + actuators[2] - actuators[3]) * kd          # Yaw
+    ])
+    return f_total, torques
+
+def rotation_matrix(roll, pitch, yaw):
+    cr = np.cos(roll)
+    sr = np.sin(roll)
+    cp = np.cos(pitch)
+    sp = np.sin(pitch)
+    cy = np.cos(yaw)
+    sy = np.sin(yaw)
+
+    R = np.array([
+        [cy*cp, cy*sp*sr-sy*cr, cy*sp*cr+sy*sr],
+        [sy*cp, sy*sp*sr+cy*cr, sy*sp*cr-cy*sr],
+        [-sp, cp*sr, cp*cr]
+    ])
+    
+    return R
+
+def dynamics(state, actuators):
+    f, torques = forces_from_actuators(actuators)
+    
+    # Compute the world frame thrust components
+    R = rotation_matrix(state['roll'], state['pitch'], state['yaw'])
+    world_thrust = R @ np.array([0, 0, f*k])
+    
+    dx = state['v_x']
+    dy = state['v_y']
+    dz = state['v_z']
+    
+    dvx = world_thrust[0] / m
+    dvy = world_thrust[1] / m
+    dvz = world_thrust[2] / m - g
+    
+    # Moment of inertia (for simplicity, assuming it's the same for all axes)
+    I_xx = I_yy = I_zz = 0.02  # This is just a placeholder, adjust based on quadcopter's properties
+
+    # Angular accelerations
+    alpha_x = torques[0] / I_xx
+    alpha_y = torques[1] / I_yy
+    alpha_z = torques[2] / I_zz
+
+    # Rate of change of roll, pitch, and yaw
+    droll = state['angular_v'][0]
+    dpitch = state['angular_v'][1]
+    dyaw = state['angular_v'][2]
+
+    # Updating angular velocities
+    dangular_v = np.array([alpha_x, alpha_y, alpha_z])
+    
+    return {
+        'x': dx, 
+        'y': dy, 
+        'z': dz,
+        'v_x': dvx, 
+        'v_y': dvy, 
+        'v_z': dvz,
+        'roll': droll,
+        'pitch': dpitch,
+        'yaw': dyaw,
+        'angular_v': dangular_v
+    }
+
+def update_state_rk4(state, actuator_outputs, dt):
+    k1 = dynamics(state, actuator_outputs)
+    k2 = dynamics({key: state[key] + 0.5 * dt * k1[key] for key in state.keys()}, actuator_outputs)
+    k3 = dynamics({key: state[key] + 0.5 * dt * k2[key] for key in state.keys()}, actuator_outputs)
+    k4 = dynamics({key: state[key] + dt * k3[key] for key in state.keys()}, actuator_outputs)
+    
+    new_state = {}
+    for key in state.keys():
+        new_state[key] = state[key] + dt * (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) / 6
+
+    # Check for ground collision
+    if new_state['z'] < GROUND_LEVEL:
+        new_state['z'] = GROUND_LEVEL
+        new_state['v_z'] = 0  # you can also set this to some fraction of current v_z if you want it to bounce
+
+    return new_state
+
+# Create a line object for trajectory
+(line,) = ax.plot([state['x']], [state['y']], [state['z']], lw=2, c='r')
+
+def update_plot():
+    """Update the trajectory plot based on drone's position."""
+    # Get current position data
+    x_data, y_data, z_data = line.get_data_3d()
+
+    # Append new position to numpy arrays
+    x_data = np.append(x_data, state['x'])
+    y_data = np.append(y_data, state['y'])
+    z_data = np.append(z_data, state['z'])
+
+    # Set updated data
+    line.set_data([x_data, y_data])
+    line.set_3d_properties(z_data)
+
+    # Draw updated plot
+    plt.draw()
+    plt.pause(0.001)  # Adjust for the desired refresh rate
 
 while True:
     
@@ -447,12 +595,29 @@ while True:
         "}")
         
     
-    if vehicle != None:
-        msg = vehicle.recv_match(blocking = False)
-        if msg != None:
+    if vehicle is not None:
+        msg = vehicle.recv_match(blocking=False)
+        if msg is not None:
             n += 1
-            print(n, "<==", msg)
+            print(n, "<== IN: ", msg)
+
+            # Check for actuator outputs message
+            if msg.get_type() == 'HIL_ACTUATOR_CONTROLS':
+                # Actuator outputs are usually in the 'controls' field of the message.
+                actuator_outputs = msg.controls
+                print("Received Actuator Outputs:", actuator_outputs)
+            elif msg.get_type() == 'ACTUATOR_OUTPUT_STATUS':
+                # Actuator outputs could also be in the 'output' field in ACTUATOR_OUTPUT_STATUS
+                actuator_outputs = msg.output
+                print("Received Actuator Outputs:", actuator_outputs)
     
+            # Update the drone's physics state
+            state = update_state_rk4(state, actuator_outputs, dt)
+            update_plot()  # Update the trajectory plot
+            print("Z value:", state['z'])
+    
+    # Sleep for the remainder of the 100 microseconds to ensure consistent loop frequency
+    time.sleep(dt - (time.time() % dt))
     
     t_abs__us += 100
     #time.sleep(1e-7)

@@ -14,43 +14,36 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def crandom():
     return random()-0.5
 
-Vehicle = None
-n = 0
-drone = {}
+def setup_mavlink_connection():
 
-class MavlinkConnector:
-    def __init__(self):
-        self.vehicle = None
-
-    def setup_mavlink_connection(self):
-
-        global vehicle
-        global n
+    global vehicle
+    global n
         
-        print("Waiting to connect...")
-        vehicle = mavutil.mavlink_connection('tcpin:172.29.64.1:4560')
-        
-        msg = vehicle.recv_match(blocking = True)
-        if msg.get_type() != "COMMAND_LONG":
-            raise Exception("error")
-        n += 1
-        print(n, "<== IN: ", msg)
-        
-        msg = vehicle.recv_match(blocking = True)
-        if msg.get_type() != "HEARTBEAT":
-            raise Exception("error")
-        n += 1
-        print(n, "<== IN", msg)
+    print("Waiting to connect...")
+    vehicle = mavutil.mavlink_connection('tcpin:172.19.176.1:4560')
     
+    msg = vehicle.recv_match(blocking = True)
+    if msg.get_type() != "COMMAND_LONG":
+        raise Exception("error")
+    n += 1
+    print(n, "<== IN: ", msg)
+    
+    msg = vehicle.recv_match(blocking = True)
+    if msg.get_type() != "HEARTBEAT":
+        raise Exception("error")
+    n += 1
+    print(n, "<== IN", msg)
+
+vehicle = None
+drone = {}
+n = 0
+
+setup_mavlink_connection()
 
 time_absolute_seconds = time.time()
 time_absolute_microseconds = round(time_absolute_seconds * 1e6)
 time_boot_microseconds = round(time_absolute_microseconds - 30e6)
-
-# Test the heartbeat function
-connector = MavlinkConnector()
-connector.setup_mavlink_connection()
-
+dt = 0.0001
 
 # Constants
 g = 9.81
@@ -58,6 +51,9 @@ m = 1.0
 l = 0.5
 k = 4.905
 kd = 0.1
+GROUND_LEVEL = 0
+SIMULATION_TIME = 360
+dt = 0.0001
 
 # Initialize State and History for Visualization
 state = {
@@ -72,11 +68,7 @@ state = {
     'yaw': 0,
     'angular_v': np.array([0, 0, 0])
 }
-
-history = {key: [] for key in state.keys()}
-actuator_history = []
-force_history = []
-
+    
 def forces_from_actuators(actuators):
     f_total = sum(actuators)
     torques = np.array([
@@ -118,7 +110,7 @@ def dynamics(state, actuators):
     dvz = world_thrust[2] / m - g
     
     # Moment of inertia (for simplicity, assuming it's the same for all axes)
-    I_xx = I_yy = I_zz = 0.02  # This is just a placeholder, adjust based on your quadcopter's properties
+    I_xx = I_yy = I_zz = 0.02  # This is just a placeholder, adjust based on quadcopter's properties
 
     # Angular accelerations
     alpha_x = torques[0] / I_xx
@@ -155,6 +147,12 @@ def update_state_rk4(state, actuators, dt):
     new_state = {}
     for key in state.keys():
         new_state[key] = state[key] + dt * (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) / 6
+
+    # Check for ground collision
+    if new_state['z'] < GROUND_LEVEL:
+        new_state['z'] = GROUND_LEVEL
+        new_state['v_z'] = 0  # you can also set this to some fraction of current v_z if you want it to bounce
+
     return new_state
 
 
@@ -169,9 +167,8 @@ def save_flight_data_to_csv(history, filename="flight_data.csv"):
             writer.writerow(row_data)
 
 
-
-
 def send_heartbeat():
+     global n
 
      if t__seconds % 1000000 == 0:
         n += 1
@@ -197,6 +194,7 @@ def send_heartbeat():
 
 
 def send_gps():
+    global n
     
     if t__microseconds % 52000 == 0:
         n += 1
@@ -252,6 +250,7 @@ def send_gps():
 
 
 def send_state_quaternion():
+    global n
 
     if t__microseconds % 8000 == 0:
         n += 1
@@ -315,6 +314,7 @@ def send_state_quaternion():
 
 
 def send_sensor():
+    global n
 
     if t__microseconds % 4000 == 0:
         n += 1
@@ -372,207 +372,95 @@ def send_sensor():
         
         print (n, "--> HIL_SENSOR ")
 
-while True:
-    
-    t__microseconds = time_absolute_microseconds - time_boot_microseconds
-    t__seconds = t__microseconds / 1e6
-    
-    send_heartbeat()
 
-    send_gps()
+def receive_actuator_outputs():
+    global n
 
-    send_state_quaternion()
-
-    send_sensor()
-
-    if vehicle != None:
-        msg = vehicle.recv_match(blocking = False)
-        if msg != None:
+    if vehicle is not None:
+        msg = vehicle.recv_match(blocking=False)
+        if msg is not None:
             n += 1
             print(n, "<== IN: ", msg)
-    
 
-    msg
-    
-    time_absolute_microseconds += 100
+            # Check for actuator outputs message
+            if msg.get_type() == 'HIL_ACTUATOR_CONTROLS':
+                # Actuator outputs are usually in the 'controls' field of the message.
+                actuator_outputs = msg.controls
+                print("Received Actuator Outputs:", actuator_outputs)
+            elif msg.get_type() == 'ACTUATOR_OUTPUT_STATUS':
+                # Actuator outputs could also be in the 'output' field in ACTUATOR_OUTPUT_STATUS
+                actuator_outputs = msg.output
+                print("Received Actuator Outputs:", actuator_outputs)
 
-    actuator_history.append(actuators)
-    f, torques = forces_from_actuators(actuators)
-    force_history.append((f, torques))
-    state = update_state_rk4(state, actuators, dt)
-
-
-
-
-
-
-
-
-#### SIMULATE  ######
-
-
-# Constants
-dt = 0.01
-duration_per_phase = 200  # For example, each phase lasts for 10 seconds.
-
-# Actuator configurations FR, FL, RF, RR
-take_off = [0.6, 0.6, 0.6, 0.6]
-hover = [0.5, 0.5, 0.5, 0.5]
-forward_flight = [0.5, 0.5, 0.51, 0.51]
-roll = [0.5, 0.6, 0.5, 0.5]
-brake =  [0.591, 0.59, 0.589, 0.59]
-heading_change = [0.48, 0.5, 0.52, 0.5]  
-descent = [0.4, 0.4, 0.4, 0.4]
-
-phases = ['take_off', 'descent', 'hover', 'forward_flight']
-actuator_configs = {
-    'take_off': take_off,
-    'hover': hover,
-    'forward_flight': forward_flight,
-    'heading_change': heading_change,
-    'descent': descent,
-    'brake' : brake,
-    'roll': roll
-}
-
-# Create an initial 3D plot for visualization
+# Create a 3D axis
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-line, = ax.plot([], [], [], lw=2)
-ax.set_xlim([-5, 5])
-ax.set_ylim([-5, 5])
-ax.set_zlim([0, 10])
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+ax.set_title('Drone 3D Trajectory')
 
-def update_3D_trajectory(x, y, z):
-    line.set_data(x, y)
-    line.set_3d_properties(z)
+# Set limits for your plot (change these as per your needs)
+ax.set_xlim([-10, 10])
+ax.set_ylim([-10, 10])
+ax.set_zlim([0, 20])
+
+# Create a line object for trajectory
+(line,) = ax.plot([state['x']], [state['y']], [state['z']], lw=2, c='r')
+
+def update_plot():
+    """Update the trajectory plot based on drone's position."""
+    # Append new position
+    x_data, y_data, z_data = line.get_data_3d()
+    x_data.append(state['x'])
+    y_data.append(state['y'])
+    z_data.append(state['z'])
+
+    # Set updated data
+    line.set_data([x_data, y_data])
+    line.set_3d_properties(z_data)
+
+    # Draw updated plot
     plt.draw()
-    plt.pause(0.01)
+    plt.pause(0.001)  # Adjust for the desired refresh rate
 
-# Simulation loop
-for phase in phases:
-    actuators = actuator_configs[phase]
-    for _ in range(duration_per_phase):
-        actuator_history.append(actuators)
-        f, torques = forces_from_actuators(actuators)
-        force_history.append((f, torques))
-        state = update_state_rk4(state, actuators, dt)
-        for key in state.keys():
-            history[key].append(state[key])
+### Simulation
+
+try:
+
+    while True:
         
-        # Update the live 3D plot with the new position
-        update_3D_trajectory(history['x'], history['y'], history['z'])
+        t__microseconds = time_absolute_microseconds - time_boot_microseconds
+        t__seconds = t__microseconds / 1e6
+        
+        # Send and receive data with PX4 SITL
+        send_heartbeat()
+        send_gps()
+        send_state_quaternion()
+        send_sensor()
+        
+        actuators = receive_actuator_outputs()
+        
+        # Update the drone's physics state
+        state = update_state_rk4(state, actuators, dt)
+        update_plot()  # Update the trajectory plot
 
-plt.show()
+        
+        # Sleep for the remainder of the 100 microseconds to ensure consistent loop frequency
+        time.sleep(dt - (time.time() % dt))
+        
+        time_absolute_microseconds += 100
+        
+        # Optional: Stop condition (for example, if simulation time exceeds a limit)
+        if t__seconds > SIMULATION_TIME:
+            break
 
+except KeyboardInterrupt:
+    print("Simulation terminated by user.")
 
-# Compute acceleration (difference in velocity over dt)
-acceleration_z = np.diff(history['v_z']) / dt
-# Pad with 0 at the beginning to make it the same length as history
-acceleration_z = np.insert(acceleration_z, 0, 0)
+except Exception as e:
+    print(f"Error occurred: {e}")
 
-# Compute angular acceleration (difference in angular velocity over dt for each axis)
-angular_acceleration = (np.diff(np.array(history['angular_v']), axis=0) / dt).tolist()
-# Pad with 0s at the beginning to make it the same length as history
-angular_acceleration = [[0,0,0]] + angular_acceleration
-
-plt.figure(figsize=(15, 35))
-
-# Position
-
-# # X distance
-# plt.subplot(7, 2, 1)  # Adjusted row count to 6
-# plt.plot(history['x'])
-# plt.title("X Distance over Time")
-# plt.ylabel("X Distance (m)")
-
-# # Y distance
-# plt.subplot(7, 2, 2)  # Adjusted row count to 6
-# plt.plot(history['y'])
-# plt.title("Y Distance over Time")
-# plt.ylabel("Y Distance (m)")
-
-# Z distance
-plt.subplot(7, 2, 3)
-plt.plot(history['z'])
-plt.title("Altitude over Time")
-plt.ylabel("Altitude (m)")
-
-# Velocity
-
-# v_x
-plt.subplot(7, 2, 4)
-plt.plot(history['v_x'])
-plt.title("Vx over Time")
-plt.ylabel("Vx (m/s)")
-
-# v_y
-plt.subplot(7, 2, 5)
-plt.plot(history['v_y'])
-plt.title("Vy over Time")
-plt.ylabel("Vy (m/s)")
-
-# v_z 
-plt.subplot(7, 2, 6)
-plt.plot(history['v_z'])
-plt.title("Vz over Time")
-plt.ylabel("Vz (m/s)")
-
-
-# Acceleration
-
-plt.subplot(7, 2, 13)
-plt.plot(acceleration_z)
-plt.title("Acceleration in Z over Time")
-plt.ylabel("Acceleration (m/s^2)")
-
-# Attitude
-
-# Roll
-plt.subplot(7, 2, 7)
-plt.plot(history['roll'])
-plt.title("Roll Angle over Time")
-plt.ylabel("Roll (radians)")
-
-# Pitch
-plt.subplot(7, 2, 8)
-plt.plot(history['pitch'])
-plt.title("Pitch Angle over Time")
-plt.ylabel("Pitch (radians)")
-
-# Yaw
-plt.subplot(7, 2, 9)
-plt.plot(history['yaw'])
-plt.title("Yaw Angle over Time")
-plt.ylabel("Yaw (radians)")
-
-# Angular Velocity
-plt.subplot(7, 2, 10)
-labels = ['X', 'Y', 'Z']
-for i in range(3):
-    plt.plot([v[i] for v in history['angular_v']], label=f'Angular Vel. {labels[i]}')
-plt.title("Angular Velocities over Time")
-plt.ylabel("Ang. Vel. (rad/s)")
-plt.legend()
-
-# Actuator Outputs and Forces
-plt.subplot(7, 2, 11)
-for i in range(4):
-    plt.plot([act[i] for act in actuator_history], label=f'Actuator {i+1}')
-plt.title("Actuator Outputs over Time")
-plt.ylabel("Actuator Output")
-plt.legend()
-
-# Torque
-plt.subplot(7, 2, 12)
-torque_labels = ['Roll', 'Pitch', 'Yaw']
-for i in range(3):
-    plt.plot([t[1][i] for t in force_history], label=f'Torque {torque_labels[i]}')
-plt.title("Torques over Time")
-plt.ylabel("Torque")
-plt.legend()
-
-plt.tight_layout()
-plt.show()
-
-save_flight_data_to_csv(history)
+finally:
+    # Any cleanup or post-simulation tasks can be added here
+    pass
