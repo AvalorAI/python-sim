@@ -179,12 +179,12 @@ state = {
     'angular_v': np.array([0, 0, 0])
 }
     
-def forces_from_actuators(actuators):
-    f_total = sum(actuators)
+def forces_from_actuators(actuator_outputs):
+    f_total = sum(actuator_outputs)
     torques = np.array([
-        ((actuators[0] + actuators[3]) - (actuators[1] + actuators[2])) * l * k,  # Roll
-        ((actuators[0] + actuators[1]) - (actuators[2] + actuators[3])) * l * k,  # Pitch
-        (actuators[0] - actuators[1] + actuators[2] - actuators[3]) * kd          # Yaw
+        ((actuator_outputs[0] + actuator_outputs[3]) - (actuator_outputs[1] + actuator_outputs[2])) * l * k,  # Roll
+        ((actuator_outputs[0] + actuator_outputs[1]) - (actuator_outputs[2] + actuator_outputs[3])) * l * k,  # Pitch
+        (actuator_outputs[0] - actuator_outputs[1] + actuator_outputs[2] - actuator_outputs[3]) * kd          # Yaw
     ])
     return f_total, torques
 
@@ -204,8 +204,8 @@ def rotation_matrix(roll, pitch, yaw):
     
     return R
 
-def dynamics(state, actuators):
-    f, torques = forces_from_actuators(actuators)
+def dynamics(state, actuator_outputs):
+    f, torques = forces_from_actuators(actuator_outputs)
     
     # Compute the world frame thrust components
     R = rotation_matrix(state['roll'], state['pitch'], state['yaw'])

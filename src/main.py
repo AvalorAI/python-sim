@@ -225,7 +225,7 @@ def send_gps():
         cog                 = drone['i_cog__cdeg']          # Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535 [cdeg] (type:uint16_t)
         satellites_visible  = 10                            # Number of satellites visible. If unknown, set to 255 (type:uint8_t)
         the_id              = 0                             # GPS ID (zero indexed). Used for multiple GPS inputs (type:uint8_t)
-        yaw                 = 0                             # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
+        yaw                 = 90                             # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
         
         if vehicle != None:
             vehicle.mav.hil_gps_send(
@@ -281,9 +281,9 @@ def send_state_quaternion():
         lat                 = drone['i_lat__degE7']             # Latitude [degE7] (type:int32_t)
         lon                 = drone['i_lon__degE7']             # Longitude [degE7] (type:int32_t)
         alt                 = drone['i_alt__mm']                # Altitude [mm] (type:int32_t)
-        vx                  = drone['i_vx__cm/s']               # Ground X Speed (Latitude) [cm/s] (type:int16_t)
-        vy                  = drone['i_vy__cm/s']               # Ground Y Speed (Longitude) [cm/s] (type:int16_t)
-        vz                  = drone['i_vz__cm/s']               # Ground Z Speed (Altitude) [cm/s] (type:int16_t)
+        vx                  = state['v_x']                      # Ground X Speed (Latitude) [cm/s] (type:int16_t)
+        vy                  = state['v_y']                      # Ground Y Speed (Longitude) [cm/s] (type:int16_t)
+        vz                  = state['v_z']                      # Ground Z Speed (Altitude) [cm/s] (type:int16_t)
         ind_airspeed        = drone['i_ind_airspeed__cm/s']     # Indicated airspeed [cm/s] (type:uint16_t)
         true_airspeed       = drone['i_true_airspeed__cm/s']    # True airspeed [cm/s] (type:uint16_t)
         xacc                = drone['i_xacc__mG']               # X acceleration [mG] (type:int16_t)
