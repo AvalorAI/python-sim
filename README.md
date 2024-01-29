@@ -13,8 +13,8 @@ This script simulates the dynamics of a quadcopter in a 3D environment. By integ
 4. Open wsl terminal in PX4 folder
 5. Run `ipconfig` on your Windows machine to find the WSL_IP
 6. In your WSL terminal run `export PX4_SIM_HOST_ADDR=${WSL_IP}`
+8. In WSL`PX4/PX4-Autopilot` run `make px4_sitl none_iris`
 7. On your Windows machine, in python-sim/src run `py mavlink_connector.py`
-8. Then, run `make px4_sitl none_iris`
 
 This should connect the simulator to the python file. 
 

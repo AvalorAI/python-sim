@@ -1,7 +1,10 @@
 import time
 import logging
 from pymavlink import mavutil
+from random import random
 
+def crandom():
+    return random()-0.5
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,7 +24,7 @@ class MavlinkConnector:
         global n
         
         print("Waiting to connect...")
-        vehicle = mavutil.mavlink_connection('tcpin:172.29.64.1:4560')
+        vehicle = mavutil.mavlink_connection('tcpin:172.19.176.1:4560')
         
         msg = vehicle.recv_match(blocking = True)
         if msg.get_type() != "COMMAND_LONG":
@@ -46,8 +49,10 @@ connector.setup_mavlink_connection()
 
 
 def send_heartbeat():
-
-     if t__seconds % 1000000 == 0:
+    
+    global n
+    
+    if t__seconds % 1000000 == 0:
         n += 1
         
         the_type        = 0     # Vehicle or component type. For a flight controller component the vehicle type (quadrotor, helicopter, etc.). For other components the component type (e.g. camera, gimbal, etc.). This should be used in preference to component id for identifying the component type. (type:uint8_t, values:MAV_TYPE)
@@ -71,7 +76,24 @@ def send_heartbeat():
 
 
 def send_gps():
+
+    global n
+
+    ### set dummy values
+
+    drone['i_lat__degE7']               = round((   47.397742   +crandom()*5e-7     )*1e7)
+    drone['i_lon__degE7']               = round((   8.545594    +crandom()*5e-7     )*1e7)
+    drone['i_alt__mm']                  = round((   488         +crandom()*0.05     )*1000)
+    drone['i_eph__cm']                  = round((   0.3         + random()*0.001    )*100)
+    drone['i_epv__cm']                  = round((   0.4         + random()*0.001    )*100)
+    drone['i_vel__cm/s']                = round((   0           + random()*0.001    )*100)
+    drone['i_vn__cm/s']                 = round((   0           + random()*0.001    )*100)
+    drone['i_ve__cm/s']                 = round((   0           + random()*0.001    )*100)
+    drone['i_vd__cm/s']                 = round((   0           + random()*0.001    )*100)
+    drone['i_cog__cdeg']                = round((   0           +crandom()*0.001    )*100)
     
+    ###
+
     if t__microseconds % 52000 == 0:
         n += 1
         
@@ -114,6 +136,33 @@ def send_gps():
 
 
 def send_state_quaternion():
+
+    global n
+
+    ### set dummy values
+
+    drone['f_attitude_quaternion__1']   = [
+                                        float((   1           +crandom()*0        )*1),
+                                        float((   0           +crandom()*0        )*1),
+                                        float((   0           +crandom()*0        )*1),
+                                        float((   0           +crandom()*0        )*1),
+                                        ]
+    drone['f_rollspeed__rad/s']         = float((   0           +crandom()*0        )*1)
+    drone['f_pitchspeed__rad/s']        = float((   0           +crandom()*0        )*1)
+    drone['f_yawspeed__rad/s']          = float((   0           +crandom()*0        )*1)
+    drone['i_vx__cm/s']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_vy__cm/s']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_vz__cm/s']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_ind_airspeed__cm/s']       = round((   0           + random()*0.001    )*100)
+    drone['i_true_airspeed__cm/s']      = round((   0           + random()*0.3      )*100)
+    drone['i_xacc__mG']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_yacc__mG']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_zacc__mG']                 = round((   0           +crandom()*0.001    )*100)
+    drone['i_lat__degE7']               = round((   47.397742   +crandom()*5e-7     )*1e7)
+    drone['i_lon__degE7']               = round((   8.545594    +crandom()*5e-7     )*1e7)
+    drone['i_alt__mm']                  = round((   488         +crandom()*0.05     )*1000)
+
+    ###
 
     if t__microseconds % 8000 == 0:
         n += 1
@@ -159,6 +208,26 @@ def send_state_quaternion():
 
 
 def send_sensor():
+
+    global n
+
+    ### set dummy values
+
+    drone['f_xacc__m/s2']               = float((   0           +crandom()*0.2      )*1)
+    drone['f_yacc__m/s2']               = float((   0           +crandom()*0.2      )*1)
+    drone['f_zacc__m/s2']               = float((   -9.81       +crandom()*0.2      )*1)
+    drone['f_xgyro__rad/s']             = float((   0           +crandom()*0.04     )*1)
+    drone['f_ygyro__rad/s']             = float((   0           +crandom()*0.04     )*1)
+    drone['f_zgyro__rad/s']             = float((   0           +crandom()*0.04     )*1)
+    drone['f_xmag__gauss']              = float((   0.215       +crandom()*0.02     )*1)
+    drone['f_ymag__gauss']              = float((   0.01        +crandom()*0.02     )*1)
+    drone['f_zmag__gauss']              = float((   0.43        +crandom()*0.02     )*1)
+    drone['f_abs_pressure__hPa']        = float((   95598       +crandom()*4        )*0.01)
+    drone['f_diff_pressure__hPa']       = float((   0           +crandom()*0        )*0.01)
+    drone['f_pressure_alt__?']          = float((   488         +crandom()*0.5      )*1)
+    drone['f_temperature__degC']        = float((   0           +crandom()*0        )*1)
+    
+    ###
 
     if t__microseconds % 4000 == 0:
         n += 1
