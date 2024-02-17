@@ -333,7 +333,7 @@ def send_sensor():
         drone['f_pressure_alt__?']          = float((   488         +crandom()*0.5      )*1)
         drone['f_temperature__degC']        = float((   0           +crandom()*0        )*1)
         
-        time_usec           = time_absolute_microseconds    # Timestamp (UNIX Epoch time or time since system boot). The receiving end can infer timestamp format (since 1.1.1970 or since system boot) by checking for the magnitude of the number. [us] (type:uint64_t)
+        time_usec           = time_absolute_microseconds    # Timestamp [us] (type:uint64_t)
         xacc                = drone['f_xacc__m/s2']         # X acceleration [m/s/s] (type:float)
         yacc                = drone['f_yacc__m/s2']         # Y acceleration [m/s/s] (type:float)
         zacc                = drone['f_zacc__m/s2']         # Z acceleration [m/s/s] (type:float)

@@ -1,8 +1,9 @@
 import time
-from mavlink_connector import MavlinkConnector
-from physics import VehiclePhysics
-from visualizer import Visualizer
-from gps import GPS
+from mavlink.mavlink_connector import MavlinkConnector
+from vehicles.physics import IMU
+from util.visualizer import Visualizer
+from sensors.gps import GPS
+from vehicles.quad import Quadcopter
 
 DT = 0.001
 SIMULATION_TIME = 30
@@ -10,10 +11,11 @@ GROUND_LEVEL = 0
 HOME_LAT = 51.4801492 * 1e7
 HOME_LON = 5.3421784 * 1e7
 
-physics = VehiclePhysics()
+quad = Quadcopter()
+physics = IMU()
+gps = GPS(HOME_LAT, HOME_LON)
 connector = MavlinkConnector()
 visualyzer = Visualizer()
-gps = GPS(HOME_LAT, HOME_LON)
 
 # Set time
 time_absolute_seconds = time.time()
@@ -28,20 +30,29 @@ try:
         t__microseconds = time_absolute_microseconds - time_boot_microseconds
         t__seconds = t__microseconds / 1e6
 
-        # Update MAVLink
-        connector.send_heartbeat()
-        connector.send_gps(time_absolute_microseconds, t__microseconds)
-        connector.send_state_quaternion(time_absolute_microseconds, t__microseconds)
-        connector.send_sensor(time_absolute_microseconds, t__microseconds)
-        actuators = connector.receive_actuator_outputs()
-        
-        # Update the drone's physics state
+        # Update sensor state
         state = physics.update_state_rk4(state, actuators, DT, GROUND_LEVEL)
-
-        # Update GPS
+        heading = physics.get_heading()
+        pressure = physics.pressure_from_altitude()
         gps_position = gps.get_gps_position(physics.state['x'], physics.state['y'])
 
-        # Update barometer
+        # Update quadcopter state
+        quad.velocity = [physics.state['v_x'], physics.state['v_y'], physics.state['v_z']]
+        quad.acceleration = [physics.state['acc_x'], physics.state['acc_y'], physics.state['acc_z']]
+        quad.attitude = physics.state['attitude_quaternion']
+        quad.lat = gps.home_lat
+        quad.lon = gps.home_lon
+        quad.alt = physics.state['z']
+        quad.heading = heading
+        quad.airspeed = physics.get_airspeed()
+        quad.angular_speed = physics.state['angular_v']
+
+        # Update MAVLink
+        connector.send_heartbeat()
+        connector.send_gps(time_absolute_microseconds, t__microseconds, quad)
+        connector.send_state_quaternion(time_absolute_microseconds, t__microseconds, quad)
+        connector.send_sensor(time_absolute_microseconds, t__microseconds, quad)
+        actuators = connector.receive_actuator_outputs()
 
         # Plot trajectory
         visualyzer.update_plot(state)

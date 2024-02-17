@@ -10,23 +10,20 @@ class IMU:
         self.l = 0.5 # Distance between the quadcopter's center and its actuators.
         self.k = 4.905 # Thrust coefficient
         self.kd = 0.1 # Drag coefficient
+        self.standard_pressure = 1013.25 # Barometric pressure at home pos
 
         self.state = {
             'x': 0, # --> GPS lon
             'y': 0, # --> GPS lat
             'z': 0, # --> alt in mm 
-            'vn': 0,
-            've': 0,
-            'vd': 0,
-            'eph': 0,
-            'epv': 0,
-            'cog': 0, 
             'v_x': 0, # --> vx_cm
             'v_y': 0, # --> vy_cm
             'v_z': 0, # --> vz_cm
+            'acc_x': 0,
+            'acc_y': 0,
+            'acc_z': 0,
             'attitude_quaternion': np.array([1,0,0,0]),
-            'angular_v': np.array([0, 0, 0]), # --> rollspeed, pitchspeed, yawspeed in rad/s
-            'barometer': 1013.25
+            'angular_v': np.array([0, 0, 0]), # --> rollspeed, pitchspeed, yawspeed in rad/s            
         }
     
     def forces_from_actuators(self, actuators):
@@ -54,7 +51,7 @@ class IMU:
         
         return R
 
-    def dynamics(self, state, actuators):
+    def dynamics(self, state, actuators,dt):
         f, torques = self.forces_from_actuators(actuators)
         
         # Compute the world frame thrust components
@@ -65,9 +62,9 @@ class IMU:
         dy = state['v_y']
         dz = state['v_z']
         
-        dvx = world_thrust[0] / self.m
-        dvy = world_thrust[1] / self.m
-        dvz = world_thrust[2] / self.m - self.g
+        dvx = world_thrust[0] / self.mass
+        dvy = world_thrust[1] / self.mass
+        dvz = world_thrust[2] / self.mass - self.gravity
         
         # Moment of inertia (for simplicity, assuming it's the same for all axes)
         I_xx = I_yy = I_zz = 0.02  # This is just a placeholder, adjust based on quadcopter's properties
@@ -84,19 +81,54 @@ class IMU:
 
         # Updating angular velocities
         dangular_v = np.array([alpha_x, alpha_y, alpha_z])
+
+        # Compute new positions based on current velocities and time step
+        x = state['x'] + state['v_x'] * dt
+        y = state['y'] + state['v_y'] * dt
+        z = state['z'] + state['v_z'] * dt
     
         return {
-            'x': dx, 
-            'y': dy, 
-            'z': dz,
-            'v_x': dvx, 
-            'v_y': dvy, 
-            'v_z': dvz,
+            'x': x, 
+            'y': y, 
+            'z': z,
+            'v_x': dx, 
+            'v_y': dy, 
+            'v_z': dz,
+            'acc_x': dvx,
+            'acc_y': dvy,
+            'acc_z': dvz,
             'roll': droll,
             'pitch': dpitch,
             'yaw': dyaw,
             'angular_v': dangular_v
         }
+    
+    def get_heading(self):
+        # Get the yaw value from the state dictionary
+        yaw_radians = self.state['yaw']
+
+        # Convert yaw from radians to degrees
+        yaw_degrees = np.degrees(yaw_radians)
+
+        return yaw_degrees
+
+    def get_airspeed(self):
+        # Retrieve the velocity components from the state
+        v_x = self.state['v_x']
+        v_y = self.state['v_y']
+        v_z = self.state['v_z']
+
+        # Calculate the airspeed (magnitude of the velocity vector)
+        airspeed = np.sqrt(v_x**2 + v_y**2 + v_z**2)
+
+        return airspeed
+    
+    def pressure_from_altitude(self):
+        # Convert altitude from mm to feet
+        altitude_ft = self.state['z'] / 304.8
+        # Calculate pressure using the barometric formula
+        pressure = self.standard_pressure * (1 - 0.0065 * altitude_ft / 288.15) ** 5.255
+        return pressure
 
     def update_state_rk4(self, state, actuators, dt, ground_level):
         k1 = self.dynamics(state, actuators)
@@ -114,18 +146,5 @@ class IMU:
             new_state['v_z'] = 0  # you can also set this to some fraction of current v_z if you want it to bounce
 
         return new_state
-    
-    def simulate_pressure_change(self):
-
-        pressure_change = random.uniform(-.5, .5)
-        self.state['barometer'] += pressure_change
-
-    def altitude_from_barometer(self):
-
-        self.simulate_pressure_change()
-
-        alt = (1 - (self.drone['barometer'] / 1013.25) ** 0.190284) * 145366.45 * 0.3048
-
-        self.drone['alt'] = alt * 1000
 
         
