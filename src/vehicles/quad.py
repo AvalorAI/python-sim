@@ -1,4 +1,5 @@
 import numpy 
+import physics
 
 class Quadcopter:
 
@@ -13,5 +14,12 @@ class Quadcopter:
         self.heading = 0
         self.airspeed = 0
         self.angular_speed = [0,0,0]
+        self.pressure = 0
+
+
+
+
+
+
 
 

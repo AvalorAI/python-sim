@@ -1,7 +1,8 @@
 import logging
+import numpy as np
 from pymavlink import mavutil
 from random import random
-from vehicles.quad import quadcopter
+from vehicles.quad import Quadcopter
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -53,7 +54,7 @@ class MavlinkConnector:
             print(self.n, "OUT: --> HEARTBEAT")
 
 
-    def send_gps(self, time_absolute_microseconds, t__microseconds, quad):
+    def send_gps(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
 
         if t__microseconds % 52000 == 0:
 
@@ -61,55 +62,55 @@ class MavlinkConnector:
                
             if self.vehicle != None:
                 self.vehicle.mav.hil_gps_send(
-                    time_usec           = time_absolute_microseconds, # Timestamp [us] (type:uint64_t)
-                    fix_type            = 3, # 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix. (type:uint8_t)
-                    lat                 = quad.lat, # Latitude (WGS84) [degE7] (type:int32_t)
-                    lon                 = quad.lon, # Longitude (WGS84) [degE7] (type:int32_t)
-                    alt                 = quad.alt, # Altitude (MSL). Positive for up. [mm] (type:int32_t)
+                    time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
+                    fix_type            = np.int8(3), # 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix. (type:uint8_t)
+                    lat                 = np.int32(quad.lat), # Latitude (WGS84) [degE7] (type:int32_t)
+                    lon                 = np.int32(quad.lon), # Longitude (WGS84) [degE7] (type:int32_t)
+                    alt                 = np.int32(quad.alt * 100), # Altitude (MSL). Positive for up. [mm] (type:int32_t)
                     eph                 = UINT16_MAX, # GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
                     epv                 = UINT16_MAX, # GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
-                    vel                 = 65535, # GPS ground speed. If unknown, set to: 65535 [cm/s] (type:uint16_t)
-                    vn                  = quad.vy *-1, # GPS velocity in north direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    ve                  = quad.vx, # GPS velocity in east direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    vd                  = quad.vz * -1, # GPS velocity in down direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    cog                 = 65535, # Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535 [cdeg] (type:uint16_t)
-                    satellites_visible  = 10, # Number of satellites visible. If unknown, set to 255 (type:uint8_t)
-                    id                  = 0, # GPS ID (zero indexed). Used for multiple GPS inputs (type:uint8_t)
-                    yaw                 = quad.heading * 100, # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
+                    vel                 = np.int16(65535), # GPS ground speed. If unknown, set to: 65535 [cm/s] (type:uint16_t)
+                    vn                  = np.int16(quad.vy *-1), # GPS velocity in north direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                    ve                  = np.int16(quad.vx), # GPS velocity in east direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                    vd                  = np.int16(quad.vz * -1), # GPS velocity in down direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                    cog                 = np.int16(65535), # Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535 [cdeg] (type:uint16_t)
+                    satellites_visible  = np.int8(10), # Number of satellites visible. If unknown, set to 255 (type:uint8_t)
+                    id                  = np.int8(0), # GPS ID (zero indexed). Used for multiple GPS inputs (type:uint8_t)
+                    yaw                 = np.int16(quad.heading * 100), # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
                 )
 
         print(self.n, "OUT: --> GPS")
 
 
-    def send_state_quaternion(self, time_absolute_microseconds, t__microseconds, quad):
+    def send_state_quaternion(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
 
         if t__microseconds % 8000 == 0:
             n += 1
             
             if self.vehicle != None:
                 self.vehicle.mav.hil_state_quaternion_send(
-                    time_usec           = time_absolute_microseconds, # Timestamp [us] (type:uint64_t)
+                    time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
                     attitude_quaternion = quad.attitude, # Vehicle attitude expressed as normalized quaternion in w, x, y, z order (with 1 0 0 0 being the null-rotation) (type:float)
-                    rollspeed           = quad.roll_speed, # Body frame roll / phi angular speed [rad/s] (type:float)
-                    pitchspeed          = quad.pitch_speed, # Body frame pitch / theta angular speed [rad/s] (type:float)
-                    yawspeed            = quad.yaw_speed, # Body frame yaw / psi angular speed [rad/s] (type:float)
-                    lat                 = quad.lat, # Latitude [degE7] (type:int32_t)
-                    lon                 = quad.lon, # Longitude [degE7] (type:int32_t)
-                    alt                 = quad.alt, # Altitude [mm] (type:int32_t)
-                    vx                  = quad.vx, # Ground X Speed (Latitude) [cm/s] (type:int16_t)
-                    vy                  = quad.vy, # Ground Y Speed (Longitude) [cm/s] (type:int16_t)
-                    vz                  = quad.vz, # Ground Z Speed (Altitude) [cm/s] (type:int16_t)
-                    ind_airspeed        = quad.airspeed, # Indicated airspeed [cm/s] (type:uint16_t)
-                    true_airspeed       = quad.airspeed, # True airspeed [cm/s] (type:uint16_t)
-                    xacc                = quad.xacc, # X acceleration [mG] (type:int16_t)
-                    yacc                = quad.yacc, # Y acceleration [mG] (type:int16_t)
-                    zacc                = quad.zacc, # Z acceleration [mG] (type:int16_t)
+                    rollspeed           = float(quad.angular_speed[0]), # Body frame roll / phi angular speed [rad/s] (type:float)
+                    pitchspeed          = float(quad.angular_speed[1]), # Body frame pitch / theta angular speed [rad/s] (type:float)
+                    yawspeed            = float(quad.angular_speed[2]), # Body frame yaw / psi angular speed [rad/s] (type:float)
+                    lat                 = np.int32(quad.lat), # Latitude [degE7] (type:int32_t)
+                    lon                 = np.int32(quad.lon), # Longitude [degE7] (type:int32_t)
+                    alt                 = np.int32(quad.alt * 100), # Altitude [mm] (type:int32_t)
+                    vx                  = np.int16(quad.velocity[0]), # Ground X Speed (Latitude) [cm/s] (type:int16_t)
+                    vy                  = np.int16(quad.velocity[1]), # Ground Y Speed (Longitude) [cm/s] (type:int16_t)
+                    vz                  = np.int16(quad.velocity[2]), # Ground Z Speed (Altitude) [cm/s] (type:int16_t)
+                    ind_airspeed        = np.int16(quad.airspeed), # Indicated airspeed [cm/s] (type:uint16_t)
+                    true_airspeed       = np.int16(quad.airspeed), # True airspeed [cm/s] (type:uint16_t)
+                    xacc                = np.int16((quad.acceleration[0] / 981) * 1000), # X acceleration [mG] (type:int16_t)
+                    yacc                = np.int16((quad.acceleration[1] / 981) * 1000), # Y acceleration [mG] (type:int16_t)
+                    zacc                = np.int16((quad.acceleration[2] / 981) * 1000), # Z acceleration [mG] (type:int16_t)
                 )
             
             print (self.n, "--> HIL_STATE_QUATERNION")
 
 
-    def send_sensor(self, time_absolute_microseconds, t__microseconds, quad):
+    def send_sensor(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
 
         if t__microseconds % 4000 == 0:
             
@@ -117,22 +118,22 @@ class MavlinkConnector:
             
             if self.vehicle != None:
                 self.vehicle.mav.hil_sensor_send(
-                    time_usec           = time_absolute_microseconds, # Timestamp [us] (type:uint64_t)
-                    xacc                = quad.xacc, # X acceleration [m/s/s] (type:float)
-                    yacc                = quad.yacc, # Y acceleration [m/s/s] (type:float)
-                    zacc                = quad.zacc, # Z acceleration [m/s/s] (type:float)
-                    xgyro               = quad.angular_x_speed, # Angular speed around X axis in body frame [rad/s] (type:float)
-                    ygyro               = quad.angular_y_speed, # Angular speed around Y axis in body frame [rad/s] (type:float)
-                    zgyro               = quad.angular_z_speed, # Angular speed around X axis in body frame [rad/s] (type:float)
-                    xmag                = quad.xmag, # X Magnetic field [gauss] (type:float)
-                    ymag                = quad.ymag, # Y Magnetic field [gauss] (type:float)
-                    zmag                = quad.zmag, # Z Magnetic field [gauss] (type:float)
-                    abs_pressure        = quad.pressure, # Absolute pressure [hPa] (type:float)
-                    diff_pressure       = quad.pressure, # Differential pressure (airspeed) [hPa] (type:float)
-                    pressure_alt        = quad.alt, # Altitude calculated from pressure (type:float)
-                    temperature         = 40.0, # Temperature [degC] (type:float)
-                    fields_updated      = 7167, # Bitmap for fields that have updated since last message, bit 0 = xacc, bit 12: temperature, bit 31: full reset of attitude/position/velocities/etc was performed in sim. (type:uint32_t)
-                    id                  = 0 # Sensor ID (zero indexed). Used for multiple sensor inputs (type:uint8_t)
+                    time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
+                    xacc                = float(quad.acceleration[0] / 100), # X acceleration [m/s/s] (type:float)
+                    yacc                = float(quad.acceleration[1] / 100), # Y acceleration [m/s/s] (type:float)
+                    zacc                = float(quad.acceleration[2] / 100), # Z acceleration [m/s/s] (type:float)
+                    xgyro               = float(quad.angular_speed[0]), # Angular speed around X axis in body frame [rad/s] (type:float)
+                    ygyro               = float(quad.angular_speed[1]), # Angular speed around Y axis in body frame [rad/s] (type:float)
+                    zgyro               = float(quad.angular_speed[2]), # Angular speed around X axis in body frame [rad/s] (type:float)
+                    xmag                = float(quad.xmag), # X Magnetic field [gauss] (type:float)
+                    ymag                = float(quad.ymag), # Y Magnetic field [gauss] (type:float)
+                    zmag                = float(quad.zmag), # Z Magnetic field [gauss] (type:float)
+                    abs_pressure        = float(quad.pressure), # Absolute pressure [hPa] (type:float)
+                    diff_pressure       = float(quad.pressure), # Differential pressure (airspeed) [hPa] (type:float)
+                    pressure_alt        = float(quad.alt), # Altitude calculated from pressure (type:float)
+                    temperature         = float(40.0), # Temperature [degC] (type:float)
+                    fields_updated      = np.int32(7167), # Bitmap for fields that have updated since last message, bit 0 = xacc, bit 12: temperature, bit 31: full reset of attitude/position/velocities/etc was performed in sim. (type:uint32_t)
+                    id                  = np.int8(0) # Sensor ID (zero indexed). Used for multiple sensor inputs (type:uint8_t)
                 )
             
             print (self.n, "--> HIL_SENSOR ")

@@ -15,7 +15,7 @@ quad = Quadcopter()
 physics = IMU()
 gps = GPS(HOME_LAT, HOME_LON)
 connector = MavlinkConnector()
-visualyzer = Visualizer()
+visualyzer = Visualizer(physics.state)
 
 # Set time
 time_absolute_seconds = time.time()
@@ -31,21 +31,22 @@ try:
         t__seconds = t__microseconds / 1e6
 
         # Update sensor state
-        state = physics.update_state_rk4(state, actuators, DT, GROUND_LEVEL)
-        heading = physics.get_heading()
-        pressure = physics.pressure_from_altitude()
+        state = physics.update_state_rk4(physics.state, physics.actuators, DT, GROUND_LEVEL)
+        heading = physics.get_heading() # deg
+        pressure = physics.pressure_from_altitude() # Hpa
         gps_position = gps.get_gps_position(physics.state['x'], physics.state['y'])
 
         # Update quadcopter state
-        quad.velocity = [physics.state['v_x'], physics.state['v_y'], physics.state['v_z']]
-        quad.acceleration = [physics.state['acc_x'], physics.state['acc_y'], physics.state['acc_z']]
+        quad.velocity = [physics.state['v_x'], physics.state['v_y'], physics.state['v_z']] # cm/s
+        quad.acceleration = [physics.state['acc_x'], physics.state['acc_y'], physics.state['acc_z']] # cm/s/s
         quad.attitude = physics.state['attitude_quaternion']
-        quad.lat = gps.home_lat
-        quad.lon = gps.home_lon
-        quad.alt = physics.state['z']
-        quad.heading = heading
-        quad.airspeed = physics.get_airspeed()
-        quad.angular_speed = physics.state['angular_v']
+        quad.lat = gps_position[0] # 1e7
+        quad.lon = gps_position[1] # 1e7
+        quad.alt = physics.state['z'] # cm
+        quad.heading = heading # deg
+        quad.airspeed = physics.get_airspeed() # cm/s
+        quad.angular_speed = physics.state['angular_v'] # rad/s
+        quad.pressure = pressure # Hpa
 
         # Update MAVLink
         connector.send_heartbeat()

@@ -1,4 +1,3 @@
-import random
 import numpy as np
 
 class IMU:
@@ -11,19 +10,19 @@ class IMU:
         self.k = 4.905 # Thrust coefficient
         self.kd = 0.1 # Drag coefficient
         self.standard_pressure = 1013.25 # Barometric pressure at home pos
-
+        self.actuators = [0,0,0,0]
         self.state = {
             'x': 0, # --> GPS lon
             'y': 0, # --> GPS lat
-            'z': 0, # --> alt in mm 
-            'v_x': 0, # --> vx_cm
-            'v_y': 0, # --> vy_cm
-            'v_z': 0, # --> vz_cm
-            'acc_x': 0,
-            'acc_y': 0,
-            'acc_z': 0,
+            'z': 0, # --> cm 
+            'v_x': 0, # --> cm/s
+            'v_y': 0, # --> cm/s
+            'v_z': 0, # --> cm/s
+            'acc_x': 0, # --> cm/s/s
+            'acc_y': 0, # --> cm/s/s
+            'acc_z': 0, # --> cm/s/s
             'attitude_quaternion': np.array([1,0,0,0]),
-            'angular_v': np.array([0, 0, 0]), # --> rollspeed, pitchspeed, yawspeed in rad/s            
+            'angular_v': np.array([0, 0, 0]), # --> rad/s            
         }
     
     def forces_from_actuators(self, actuators):
@@ -35,6 +34,8 @@ class IMU:
         ])
         return f_total, torques
 
+    
+    @staticmethod
     def rotation_matrix(roll, pitch, yaw):
         cr = np.cos(roll)
         sr = np.sin(roll)
@@ -57,10 +58,6 @@ class IMU:
         # Compute the world frame thrust components
         R = self.rotation_matrix(state['roll'], state['pitch'], state['yaw'])
         world_thrust = R @ np.array([0, 0, f*self.k])
-        
-        dx = state['v_x']
-        dy = state['v_y']
-        dz = state['v_z']
         
         dvx = world_thrust[0] / self.mass
         dvy = world_thrust[1] / self.mass
@@ -91,9 +88,9 @@ class IMU:
             'x': x, 
             'y': y, 
             'z': z,
-            'v_x': dx, 
-            'v_y': dy, 
-            'v_z': dz,
+            'v_x': state['v_x'] + dvx * dt,
+            'v_y': state['v_y'] + dvy * dt,
+            'v_z': state['v_z'] + dvz * dt,
             'acc_x': dvx,
             'acc_y': dvy,
             'acc_z': dvz,
@@ -124,14 +121,14 @@ class IMU:
         return airspeed
     
     def pressure_from_altitude(self):
-        # Convert altitude from mm to feet
-        altitude_ft = self.state['z'] / 304.8
+        # Convert altitude from cm to feet
+        altitude_ft = self.state['z'] / 3.048
         # Calculate pressure using the barometric formula
         pressure = self.standard_pressure * (1 - 0.0065 * altitude_ft / 288.15) ** 5.255
         return pressure
 
-    def update_state_rk4(self, state, actuators, dt, ground_level):
-        k1 = self.dynamics(state, actuators)
+    def update_state_rk4(self, state, actuators, dt):
+        k1 = self.dynamics(state, actuators, dt)
         k2 = self.dynamics({key: state[key] + 0.5 * dt * k1[key] for key in state.keys()}, actuators)
         k3 = self.dynamics({key: state[key] + 0.5 * dt * k2[key] for key in state.keys()}, actuators)
         k4 = self.dynamics({key: state[key] + dt * k3[key] for key in state.keys()}, actuators)
