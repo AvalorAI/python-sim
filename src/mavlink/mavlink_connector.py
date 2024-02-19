@@ -85,7 +85,7 @@ class MavlinkConnector:
     def send_state_quaternion(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
 
         if t__microseconds % 8000 == 0:
-            n += 1
+            self.n += 1
             
             if self.vehicle != None:
                 self.vehicle.mav.hil_state_quaternion_send(

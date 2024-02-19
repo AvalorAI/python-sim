@@ -35,7 +35,44 @@ def setup_mavlink_connection():
     print(n, "<== IN", msg)
 
 vehicle = None
-drone = {}
+drone = {
+    'i_lat__degE7': 0,
+    'i_lon__degE7': 0,
+    'i_alt__mm': 0,
+    'i_eph__cm': 0,
+    'i_epv__cm': 0,
+    'i_vel__cm/s': 0,
+    'i_vn__cm/s': 0,
+    'i_ve__cm/s': 0,
+    'i_vd__cm/s': 0,
+    'i_cog__cdeg': 0,
+    'f_attitude_quaternion__1': [1.0, 0.0, 0.0, 0.0],
+    'f_rollspeed__rad/s': 0.0,
+    'f_pitchspeed__rad/s': 0.0,
+    'f_yawspeed__rad/s': 0.0,
+    'i_vx__cm/s': 0,
+    'i_vy__cm/s': 0,
+    'i_vz__cm/s': 0,
+    'i_ind_airspeed__cm/s': 0,
+    'i_true_airspeed__cm/s': 0,
+    'i_xacc__mG': 0,
+    'i_yacc__mG': 0,
+    'i_zacc__mG': 0,
+    'f_xacc__m/s2': 0.0,
+    'f_yacc__m/s2': 0.0,
+    'f_zacc__m/s2': -9.81,
+    'f_xgyro__rad/s': 0.0,
+    'f_ygyro__rad/s': 0.0,
+    'f_zgyro__rad/s': 0.0,
+    'f_xmag__gauss': 0.215,
+    'f_ymag__gauss': 0.01,
+    'f_zmag__gauss': 0.43,
+    'f_abs_pressure__hPa': 955.98,
+    'f_diff_pressure__hPa': 0.0,
+    'f_pressure_alt__?': 488.0,
+    'f_temperature__degC': 0.0
+}
+
 n = 0
 
 setup_mavlink_connection()
@@ -382,15 +419,17 @@ def receive_actuator_outputs():
             n += 1
             print(n, "<== IN: ", msg)
 
-            # Check for actuator outputs message
             if msg.get_type() == 'HIL_ACTUATOR_CONTROLS':
-                # Actuator outputs are usually in the 'controls' field of the message.
                 actuator_outputs = msg.controls
                 print("Received Actuator Outputs:", actuator_outputs)
+                return actuator_outputs
             elif msg.get_type() == 'ACTUATOR_OUTPUT_STATUS':
-                # Actuator outputs could also be in the 'output' field in ACTUATOR_OUTPUT_STATUS
                 actuator_outputs = msg.output
                 print("Received Actuator Outputs:", actuator_outputs)
+                return actuator_outputs
+
+    return [0, 0, 0, 0]  # Return a default value if no data is received
+
 
 # Create a 3D axis
 fig = plt.figure()
@@ -410,19 +449,27 @@ ax.set_zlim([0, 20])
 
 def update_plot():
     """Update the trajectory plot based on drone's position."""
-    # Append new position
+    # Retrieve current data
     x_data, y_data, z_data = line.get_data_3d()
+
+    # Convert arrays to lists
+    x_data = list(x_data)
+    y_data = list(y_data)
+    z_data = list(z_data)
+
+    # Append new position
     x_data.append(state['x'])
     y_data.append(state['y'])
     z_data.append(state['z'])
 
-    # Set updated data
+    # Set updated data back to the line object
     line.set_data([x_data, y_data])
     line.set_3d_properties(z_data)
 
     # Draw updated plot
     plt.draw()
     plt.pause(0.001)  # Adjust for the desired refresh rate
+
 
 ### Simulation
 
@@ -438,8 +485,11 @@ try:
         send_gps()
         send_state_quaternion()
         send_sensor()
-        
+
         actuators = receive_actuator_outputs()
+        if actuators is not None:  # Check if actuators is not None
+            state = update_state_rk4(state, actuators, dt)
+            update_plot()  # Update the trajectory plot
         
         # Update the drone's physics state
         state = update_state_rk4(state, actuators, dt)

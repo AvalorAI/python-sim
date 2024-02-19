@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 
 class IMU:
 
@@ -21,7 +22,10 @@ class IMU:
             'acc_x': 0, # --> cm/s/s
             'acc_y': 0, # --> cm/s/s
             'acc_z': 0, # --> cm/s/s
-            'attitude_quaternion': np.array([1,0,0,0]),
+            'roll': 0,
+            'pitch': 0,
+            'yaw': 0,
+            'attitude_quaternion': np.array([1,0,0,0]), # [w,x,y,z]
             'angular_v': np.array([0, 0, 0]), # --> rad/s            
         }
     
@@ -52,7 +56,7 @@ class IMU:
         
         return R
 
-    def dynamics(self, state, actuators,dt):
+    def dynamics(self, state, actuators, dt):
         f, torques = self.forces_from_actuators(actuators)
         
         # Compute the world frame thrust components
@@ -97,6 +101,7 @@ class IMU:
             'roll': droll,
             'pitch': dpitch,
             'yaw': dyaw,
+            'attitude_quaternion': self.euler_to_quaternion(droll, dpitch, dyaw),
             'angular_v': dangular_v
         }
     
@@ -108,6 +113,32 @@ class IMU:
         yaw_degrees = np.degrees(yaw_radians)
 
         return yaw_degrees
+    
+    @staticmethod
+    def euler_to_quaternion(roll, pitch, yaw):
+        """
+        Convert Euler angles to quaternion using scipy.
+
+        Parameters:
+        roll (float): Roll angle in radians.
+        pitch (float): Pitch angle in radians.
+        yaw (float): Yaw angle in radians.
+
+        Returns:
+        numpy.array: Quaternion [x, y, z, w]
+        """
+        # Create a rotation object from Euler angles
+        r = R.from_euler('xyz', [roll, pitch, yaw])
+
+        # Convert to quaternion [x, y, z, w]
+        quaternion = r.as_quat()
+        
+        # Convert to quaternion and rearrange to [w, x, y, z]
+        x, y, z, w = r.as_quat()
+
+        quaternion = np.array([w, x, y, z])
+        
+        return quaternion
 
     def get_airspeed(self):
         # Retrieve the velocity components from the state
@@ -127,19 +158,19 @@ class IMU:
         pressure = self.standard_pressure * (1 - 0.0065 * altitude_ft / 288.15) ** 5.255
         return pressure
 
-    def update_state_rk4(self, state, actuators, dt):
+    def update_state_rk4(self, state, actuators, dt, GROUND_LEVEL):
         k1 = self.dynamics(state, actuators, dt)
-        k2 = self.dynamics({key: state[key] + 0.5 * dt * k1[key] for key in state.keys()}, actuators)
-        k3 = self.dynamics({key: state[key] + 0.5 * dt * k2[key] for key in state.keys()}, actuators)
-        k4 = self.dynamics({key: state[key] + dt * k3[key] for key in state.keys()}, actuators)
+        k2 = self.dynamics({key: state[key] + 0.5 * dt * k1[key] for key in state.keys()}, actuators, dt)
+        k3 = self.dynamics({key: state[key] + 0.5 * dt * k2[key] for key in state.keys()}, actuators, dt)
+        k4 = self.dynamics({key: state[key] + dt * k3[key] for key in state.keys()}, actuators, dt)
         
         new_state = {}
         for key in state.keys():
             new_state[key] = state[key] + dt * (k1[key] + 2 * k2[key] + 2 * k3[key] + k4[key]) / 6
 
         # Check for ground collision
-        if new_state['z'] < self.GROUND_LEVEL:
-            new_state['z'] = self.GROUND_LEVEL
+        if new_state['z'] < GROUND_LEVEL:
+            new_state['z'] = GROUND_LEVEL
             new_state['v_z'] = 0  # you can also set this to some fraction of current v_z if you want it to bounce
 
         return new_state

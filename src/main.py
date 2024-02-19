@@ -1,12 +1,12 @@
 import time
 from mavlink.mavlink_connector import MavlinkConnector
 from vehicles.physics import IMU
-from util.visualizer import Visualizer
+#from util.visualizer import Visualizer
 from sensors.gps import GPS
 from vehicles.quad import Quadcopter
 
 DT = 0.001
-SIMULATION_TIME = 30
+SIMULATION_TIME = 30000
 GROUND_LEVEL = 0
 HOME_LAT = 51.4801492 * 1e7
 HOME_LON = 5.3421784 * 1e7
@@ -15,7 +15,10 @@ quad = Quadcopter()
 physics = IMU()
 gps = GPS(HOME_LAT, HOME_LON)
 connector = MavlinkConnector()
-visualyzer = Visualizer(physics.state)
+# visualyzer = Visualizer(physics.state)
+
+connector.setup_mavlink_connection(n=0)
+
 
 # Set time
 time_absolute_seconds = time.time()
@@ -49,23 +52,25 @@ try:
         quad.pressure = pressure # Hpa
 
         # Update MAVLink
-        connector.send_heartbeat()
+        connector.send_heartbeat(time_absolute_seconds, connector.vehicle)
         connector.send_gps(time_absolute_microseconds, t__microseconds, quad)
         connector.send_state_quaternion(time_absolute_microseconds, t__microseconds, quad)
         connector.send_sensor(time_absolute_microseconds, t__microseconds, quad)
         actuators = connector.receive_actuator_outputs()
 
         # Plot trajectory
-        visualyzer.update_plot(state)
+        # visualyzer.update_plot(state)
 
         # Sleep for the remainder of the 100 microseconds to ensure consistent loop frequency
-        time.sleep(DT - (time.time() % DT))
+        #time.sleep(DT - (time.time() % DT))
             
         time_absolute_microseconds += 100
 
         # Optional: Stop condition (for example, if simulation time exceeds a limit)
         if t__seconds > SIMULATION_TIME:
             break
+    
+    print("While loop ended")
 
 except KeyboardInterrupt:
     print("Simulation terminated by user.")

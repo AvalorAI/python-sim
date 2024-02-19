@@ -1,5 +1,4 @@
 import numpy 
-import physics
 
 class Quadcopter:
 
