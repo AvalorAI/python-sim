@@ -28,18 +28,23 @@ class MavlinkConnector:
         n += 1
         print(n, "<== IN: ", msg)
         
+        print(f"Vehicle connected: {vehicle}")
+
         msg = vehicle.recv_match(blocking = True)
         if msg.get_type() != "HEARTBEAT":
             raise Exception("error")
         n += 1
         print(n, "<== IN", msg)
 
+        return vehicle
 
     def send_heartbeat(self, t__seconds, vehicle):
         
         if t__seconds % 1000000 == 0:
 
             self.n += 1
+            print(f'Hearbeat: {self.n}')
+
                 
             if vehicle != None:
                 vehicle.mav.heartbeat_send(
@@ -51,44 +56,57 @@ class MavlinkConnector:
                     mavlink_version     = 3, # uint8_t_mavlink_version (type:uint8_t)
                 )
             
-            print(self.n, "OUT: --> HEARTBEAT")
+                print(self.n, "OUT: --> HEARTBEAT")
+
+    
+    
+    def clamp_to_uint16(self, value):
+        return max(0, min(UINT16_MAX, value))
 
 
-    def send_gps(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
+    def send_gps(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter, vehicle):
 
         if t__microseconds % 52000 == 0:
 
             self.n += 1
-               
-            if self.vehicle != None:
-                self.vehicle.mav.hil_gps_send(
-                    time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
-                    fix_type            = np.int8(3), # 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix. (type:uint8_t)
-                    lat                 = np.int32(quad.lat), # Latitude (WGS84) [degE7] (type:int32_t)
-                    lon                 = np.int32(quad.lon), # Longitude (WGS84) [degE7] (type:int32_t)
-                    alt                 = np.int32(quad.alt * 100), # Altitude (MSL). Positive for up. [mm] (type:int32_t)
-                    eph                 = UINT16_MAX, # GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
-                    epv                 = UINT16_MAX, # GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
-                    vel                 = np.int16(65535), # GPS ground speed. If unknown, set to: 65535 [cm/s] (type:uint16_t)
-                    vn                  = np.int16(quad.vy *-1), # GPS velocity in north direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    ve                  = np.int16(quad.vx), # GPS velocity in east direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    vd                  = np.int16(quad.vz * -1), # GPS velocity in down direction in earth-fixed NED frame [cm/s] (type:int16_t)
-                    cog                 = np.int16(65535), # Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535 [cdeg] (type:uint16_t)
-                    satellites_visible  = np.int8(10), # Number of satellites visible. If unknown, set to 255 (type:uint8_t)
-                    id                  = np.int8(0), # GPS ID (zero indexed). Used for multiple GPS inputs (type:uint8_t)
-                    yaw                 = np.int16(quad.heading * 100), # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
-                )
+            print(f'GPS: {self.n}')
 
-        print(self.n, "OUT: --> GPS")
+        if vehicle != None:
+            vehicle.mav.hil_gps_send(
+                time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
+                fix_type            = np.int8(3), # 0-1: no fix, 2: 2D fix, 3: 3D fix. Some applications will not use the value of this field unless it is at least two, so always correctly fill in the fix. (type:uint8_t)
+                lat                 = np.int32(quad.lat), # Latitude (WGS84) [degE7] (type:int32_t)
+                lon                 = np.int32(quad.lon), # Longitude (WGS84) [degE7] (type:int32_t)
+                alt                 = np.int32(quad.alt * 100), # Altitude (MSL). Positive for up. [mm] (type:int32_t)
+                eph                 = UINT16_MAX, # GPS HDOP horizontal dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
+                epv                 = UINT16_MAX, # GPS VDOP vertical dilution of position (unitless). If unknown, set to: UINT16_MAX (type:uint16_t)
+                # vel                 = np.int16(65535), # GPS ground speed. If unknown, set to: 65535 [cm/s] (type:uint16_t)
+                # vn                  = np.int16(quad.velocity[0] *-1), # GPS velocity in north direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                # ve                  = np.int16(quad.velocity[1]), # GPS velocity in east direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                # vd                  = np.int16(quad.velocity[2] * -1), # GPS velocity in down direction in earth-fixed NED frame [cm/s] (type:int16_t)
+                # cog                 = np.int16(65535), # Course over ground (NOT heading, but direction of movement), 0.0..359.99 degrees. If unknown, set to: 65535 [cdeg] (type:uint16_t)
+                # id                  = np.int8(0), # GPS ID (zero indexed). Used for multiple GPS inputs (type:uint8_t)
+                # yaw                 = np.int16(quad.heading * 100), # Yaw of vehicle relative to Earth's North, zero means not available, use 36000 for north [cdeg] (type:uint16_t)
+                vel = self.clamp_to_uint16(np.int16(65535)),  # example
+                vn = self.clamp_to_uint16(np.int16(quad.velocity[0] * -1)),
+                ve = self.clamp_to_uint16(np.int16(quad.velocity[1])),
+                vd = self.clamp_to_uint16(np.int16(quad.velocity[2] * -1)),
+                cog = self.clamp_to_uint16(np.int16(65535)),
+                satellites_visible  = np.int8(10), # Number of satellites visible. If unknown, set to 255 (type:uint8_t)
+                yaw = self.clamp_to_uint16(np.int16(quad.heading * 100))
+            )
+
+            print(self.n, "OUT: --> GPS")
 
 
-    def send_state_quaternion(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
+    def send_state_quaternion(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter, vehicle):
 
         if t__microseconds % 8000 == 0:
             self.n += 1
+            print(f'State: {self.n}')
             
-            if self.vehicle != None:
-                self.vehicle.mav.hil_state_quaternion_send(
+            if vehicle != None:
+                vehicle.mav.hil_state_quaternion_send(
                     time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
                     attitude_quaternion = quad.attitude, # Vehicle attitude expressed as normalized quaternion in w, x, y, z order (with 1 0 0 0 being the null-rotation) (type:float)
                     rollspeed           = float(quad.angular_speed[0]), # Body frame roll / phi angular speed [rad/s] (type:float)
@@ -107,17 +125,18 @@ class MavlinkConnector:
                     zacc                = np.int16((quad.acceleration[2] / 981) * 1000), # Z acceleration [mG] (type:int16_t)
                 )
             
-            print (self.n, "--> HIL_STATE_QUATERNION")
+                print (self.n, "--> HIL_STATE_QUATERNION")
 
 
-    def send_sensor(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter):
+    def send_sensor(self, time_absolute_microseconds, t__microseconds, quad: Quadcopter, vehicle):
 
         if t__microseconds % 4000 == 0:
             
             self.n += 1
-            
-            if self.vehicle != None:
-                self.vehicle.mav.hil_sensor_send(
+            print(f'Sensor: {self.n}')
+
+            if vehicle != None:
+                vehicle.mav.hil_sensor_send(
                     time_usec           = np.int64(time_absolute_microseconds), # Timestamp [us] (type:uint64_t)
                     xacc                = float(quad.acceleration[0] / 100), # X acceleration [m/s/s] (type:float)
                     yacc                = float(quad.acceleration[1] / 100), # Y acceleration [m/s/s] (type:float)
@@ -125,9 +144,9 @@ class MavlinkConnector:
                     xgyro               = float(quad.angular_speed[0]), # Angular speed around X axis in body frame [rad/s] (type:float)
                     ygyro               = float(quad.angular_speed[1]), # Angular speed around Y axis in body frame [rad/s] (type:float)
                     zgyro               = float(quad.angular_speed[2]), # Angular speed around X axis in body frame [rad/s] (type:float)
-                    xmag                = float(quad.xmag), # X Magnetic field [gauss] (type:float)
-                    ymag                = float(quad.ymag), # Y Magnetic field [gauss] (type:float)
-                    zmag                = float(quad.zmag), # Z Magnetic field [gauss] (type:float)
+                    xmag                = 0.215, # X Magnetic field [gauss] (type:float)
+                    ymag                = 0.01, # Y Magnetic field [gauss] (type:float)
+                    zmag                = 0.43, # Z Magnetic field [gauss] (type:float)
                     abs_pressure        = float(quad.pressure), # Absolute pressure [hPa] (type:float)
                     diff_pressure       = float(quad.pressure), # Differential pressure (airspeed) [hPa] (type:float)
                     pressure_alt        = float(quad.alt), # Altitude calculated from pressure (type:float)
@@ -136,12 +155,12 @@ class MavlinkConnector:
                     id                  = np.int8(0) # Sensor ID (zero indexed). Used for multiple sensor inputs (type:uint8_t)
                 )
             
-            print (self.n, "--> HIL_SENSOR ")
+                print (self.n, "--> HIL_SENSOR ")
 
-    def receive_actuator_outputs(self):
+    def receive_actuator_outputs(self, vehicle):
 
-        if self.vehicle is not None:
-            msg = self.vehicle.recv_match(blocking=False)
+        if vehicle is not None:
+            msg = vehicle.recv_match(blocking=False)
             if msg is not None:
                 self.n += 1
                 print(self.n, "<== IN: ", msg)
