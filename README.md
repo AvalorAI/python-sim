@@ -15,66 +15,8 @@ This script simulates the dynamics of a quadcopter in a 3D environment. By integ
 6. In your WSL terminal run `export PX4_SIM_HOST_ADDR=${WSL_IP}`
 8. In WSL`PX4/PX4-Autopilot` run `make px4_sitl none_iris`
 7. On your Windows machine, in python-sim/src run `py main.py`
+8. Open QGC in WSL to see drone
 
-This should connect the simulator to the python file. 
-
-## **Modules:**
-
-1. **numpy** - Used for numerical calculations.
-2. **matplotlib.pyplot** - For plotting purposes.
-3. **mpl_toolkits.mplot3d** - Enables 3D plotting.
-4. **csv** - Allows reading and writing to CSV files.
-
-## **Constants:**
-
-- `g` = Acceleration due to gravity (9.81 m/s^2).
-- `m` = Mass of the quadcopter (1.0 kg).
-- `l` = Distance between the quadcopter's center and its actuators.
-- `k` = Thrust coefficient.
-- `kd` = Drag coefficient.
-
-## **State Initialization:**
-
-The `state` dictionary holds the current state of the quadcopter:
-
-- Position: `x`, `y`, `z`
-- Linear velocity: `v_x`, `v_y`, `v_z`
-- Orientation angles (Euler angles): `roll`, `pitch`, `yaw`
-- Angular velocity: `angular_v` (3D vector)
-
-`history` is a dictionary with the same keys as `state` and is used to store the quadcopter's state over time. Similarly, `actuator_history` and `force_history` are lists to store actuator outputs and force values over time, respectively.
-
-## **Key Functions:**
-
-### `forces_from_actuators(actuators)`
-
-This function computes the total force and torques exerted by the quadcopter's actuators. The actuators are assumed to be four in number, representing the four rotors.
-
-- `f_total`: Sum of the forces from all actuators.
-- `torques`: Calculated torques in roll, pitch, and yaw.
-
-### `rotation_matrix(roll, pitch, yaw)`
-
-Given the current orientation of the quadcopter (roll, pitch, and yaw), this function returns the corresponding rotation matrix. This matrix is used to convert between the quadcopter's body frame and the world frame.
-
-### `dynamics(state, actuators)`
-
-This function describes the quadcopter's dynamics. Given the current state and the outputs of the actuators, it computes:
-
-- Linear velocity components: `dx`, `dy`, `dz`
-- Acceleration due to thrust: `dvx`, `dvy`, `dvz`
-- Rate of change of orientation: `droll`, `dpitch`, `dyaw`
-- Angular accelerations: `alpha_x`, `alpha_y`, `alpha_z`
-
-The moment of inertia (`I_xx`, `I_yy`, `I_zz`) is assumed to be constant and the same for all axes.
-
-### `update_state_rk4(state, actuators, dt)`
-
-This function updates the quadcopter's state using the 4th order Runge-Kutta (RK4) method. It's a numerical method for solving ordinary differential equations. The function uses the `dynamics` function to get the rate of change of the state and integrates over a small time interval `dt` to compute the new state.
-
-## **Usage:**
-
-To use the simulator, one needs to call the `update_state_rk4` function iteratively with the current state, actuator values, and a time step `dt`. The updated state can be stored in the `history` dictionary for visualization or further analysis.
 
 
 
